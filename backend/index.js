@@ -9,6 +9,8 @@ import { exportToSTL, exportToGLB, exportToOBJ, exportToSTEP } from './exportUti
 import { processUserMessage } from './chatService.js';
 import * as db from './models/database.js';
 import { generateToken, authMiddleware } from './authMiddleware.js';
+import { getMaterialProperties, formatMaterialProperties } from './materialProperties.js';
+import { analyzeStructure, validateAnalysisInputs } from './femSolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -297,10 +299,11 @@ app.post('/api/simulate', async (req, res) => {
         
         switch (type) {
           case 'cube':
-            // Cube or rectangular box
+          case 'beam':
+            // Cube, rectangular box, or beam
             const width = params.width || params.size || 50;
             const height = params.height || params.size || 50;
-            const depth = params.depth || params.size || 50;
+            const depth = params.depth || params.length || params.size || 50;
             volumeVal = width * height * depth;
             break;
             
@@ -413,9 +416,10 @@ app.post('/api/simulate', async (req, res) => {
         
         switch (type) {
           case 'cube':
+          case 'beam':
             const width = params.width || params.size || 50;
             const height = params.height || params.size || 50;
-            const depth = params.depth || params.size || 50;
+            const depth = params.depth || params.length || params.size || 50;
             surfaceAreaVal = 2 * (width * height + width * depth + height * depth);
             break;
             
@@ -472,12 +476,13 @@ app.post('/api/simulate', async (req, res) => {
         // MOI formulas for each shape (coefficients only, will multiply by mass later)
         switch (type) {
           case 'cube':
+          case 'beam':
           case 'bracket':
           case 'plate':
-            // Cuboid (Rectangular Prism)
+            // Cuboid (Rectangular Prism) or Beam
             const w = params.width || params.size || 50;
             const h = params.height || params.size || 50;
-            const d = params.depth || params.thickness || params.size || 50;
+            const d = params.depth || params.length || params.thickness || params.size || 50;
             // For a rectangular solid about center:
             // Ixx = (1/12) * m * (h² + d²)
             // Iyy = (1/12) * m * (w² + d²)
@@ -815,6 +820,135 @@ app.post('/api/export', async (req, res) => {
     console.error('Export error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to export design', details: error.message });
+  }
+});
+
+// Structural Analysis Endpoint
+app.post('/api/structural-analysis', async (req, res) => {
+  try {
+    const { design, material, constraints, loads } = req.body;
+    
+    // Validate required inputs
+    if (!design) {
+      return res.status(400).json({
+        success: false,
+        error: 'Design geometry is required'
+      });
+    }
+    
+    if (!material) {
+      return res.status(400).json({
+        success: false,
+        error: 'Material selection is required'
+      });
+    }
+    
+    // Get material properties
+    const materialProps = getMaterialProperties(material);
+    if (!materialProps) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown material: ${material}`
+      });
+    }
+    
+    // Validate constraints
+    if (!constraints || constraints.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Static analysis requires at least one fixed support',
+        hint: 'Define a fixed constraint on at least one face'
+      });
+    }
+    
+    // Validate loads
+    if (!loads || loads.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Static analysis requires at least one applied load',
+        hint: 'Define a force or pressure load'
+      });
+    }
+    
+    // Prepare analysis parameters
+    const analysisParams = {
+      geometry: {
+        type: design.type,
+        parameters: design.parameters
+      },
+      material: materialProps,
+      constraints: constraints,
+      loads: loads
+    };
+    
+    // Validate analysis inputs
+    const validation = validateAnalysisInputs(analysisParams);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid analysis inputs',
+        details: validation.errors
+      });
+    }
+    
+    // Run structural analysis
+    console.log(`Running structural analysis for ${design.type} with ${material}`);
+    const analysisResult = analyzeStructure(analysisParams);
+    
+    // Add material info to response
+    analysisResult.materialInfo = formatMaterialProperties(material);
+    analysisResult.constraints = constraints;
+    analysisResult.loads = loads;
+    
+    // Save analysis to database if design has ID (skip for now to avoid validation errors)
+    if (design.id && false) { // Temporarily disabled
+      try {
+        await db.saveAnalysis(design.id, {
+          type: 'structural_analysis',
+          material: material, // Save material name as string
+          maxStress: analysisResult.results.maxVonMisesStress_MPa,
+          maxDisplacement: analysisResult.results.maxDisplacement_mm,
+          safetyFactor: analysisResult.results.safetyFactor,
+          status: analysisResult.results.status
+        });
+      } catch (dbError) {
+        console.error('Failed to save structural analysis to DB:', dbError);
+        // Don't fail the request if DB save fails
+      }
+    }
+    
+    console.log(`Structural analysis complete: Max stress = ${analysisResult.results.maxVonMisesStress_MPa.toFixed(2)} MPa`);
+    
+    return res.json(analysisResult);
+    
+  } catch (error) {
+    console.error('Structural analysis error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Structural analysis failed',
+      details: error.message
+    });
+  }
+});
+
+// Get material properties endpoint
+app.get('/api/materials/:materialName', (req, res) => {
+  try {
+    const { materialName } = req.params;
+    const formatted = formatMaterialProperties(materialName);
+    
+    if (!formatted) {
+      return res.status(404).json({
+        error: 'Material not found'
+      });
+    }
+    
+    return res.json(formatted);
+  } catch (error) {
+    console.error('Material lookup error:', error);
+    return res.status(500).json({
+      error: 'Failed to retrieve material properties'
+    });
   }
 });
 

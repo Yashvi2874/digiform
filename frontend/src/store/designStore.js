@@ -18,6 +18,10 @@ export const useDesignStore = create(
       simulationHistory: [],
       currentSimulationLoading: false,
       currentSimulationType: null,
+      
+      // Stress Visualization State
+      stressResults: null,
+      showStressVisualization: false,
 
       // Initialize with user ID to ensure data isolation
       initializeForUser: (userId) => {
@@ -116,6 +120,17 @@ export const useDesignStore = create(
         massProperties: null,
         massPropertiesComputed: false,
         massPropertiesError: null
+      }),
+
+      // Stress Visualization Actions
+      setStressResults: (results) => set({
+        stressResults: results,
+        showStressVisualization: true
+      }),
+
+      clearStressVisualization: () => set({
+        stressResults: null,
+        showStressVisualization: false
       })
     }),
     {

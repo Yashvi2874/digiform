@@ -49,6 +49,12 @@ function detectComponentType(text) {
   if (text.includes('triangular') && text.includes('prism')) return 'prism';
   if (text.includes('prism') && !text.includes('rectangular')) return 'prism';
   
+  // BEAM - structural element (treat as elongated cuboid/plate)
+  // Check BEFORE cuboid/box/block to prioritize beam recognition
+  if (text.includes('beam')) return 'beam';
+  if (text.includes('bar') && !text.includes('toolbar')) return 'beam';
+  if (text.includes('rod') && !text.includes('product')) return 'beam';
+  
   // Cuboid/Box/Block - check BEFORE bracket/plate
   // These should be solid cubes, not brackets with holes
   if (text.includes('cuboid')) return 'cube';
@@ -482,6 +488,46 @@ function buildParameters(type, dimensions, description) {
       }
       
       params.size = params.width; // Keep for backward compatibility
+      break;
+      
+    case 'beam':
+      // BEAM - structural element (elongated rectangular cross-section)
+      // Typical beam: length >> width, height
+      // Default proportions: length=200mm, width=50mm, height=50mm (or depth=10mm for I-beam)
+      
+      if (dimensions.length) {
+        params.length = dimensions.length;
+      } else if (dimensions.allValues.length > 0) {
+        // First value is typically length for beams
+        params.length = dimensions.allValues[0];
+      } else {
+        params.length = 200; // Default beam length
+      }
+      
+      if (dimensions.width) {
+        params.width = dimensions.width;
+      } else if (dimensions.allValues.length > 1) {
+        params.width = dimensions.allValues[1];
+      } else {
+        params.width = 50; // Default beam width
+      }
+      
+      if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.depth) {
+        params.height = dimensions.depth;
+      } else if (dimensions.thickness) {
+        params.height = dimensions.thickness;
+      } else if (dimensions.allValues.length > 2) {
+        params.height = dimensions.allValues[2];
+      } else {
+        params.height = 50; // Default beam height
+      }
+      
+      // For rendering, beam is a rectangular box oriented along length
+      // Store as width x height x length (depth)
+      params.depth = params.length;
+      
       break;
       
     case 'prism':

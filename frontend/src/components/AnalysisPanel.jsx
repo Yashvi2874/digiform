@@ -11,6 +11,7 @@ import ExportPanel from './ExportPanel';
 import MassPropertiesDisplay from './MassPropertiesDisplay';
 import SimulationControls from './SimulationControls';
 import MaterialInfo from './MaterialInfo';
+import StructuralAnalysisModal from './StructuralAnalysisModal';
 
 export default function AnalysisPanel() {
   const {
@@ -30,6 +31,9 @@ export default function AnalysisPanel() {
     currentSimulationType,
     clearMassProperties
   } = useDesignStore();
+
+  // State for structural analysis modal
+  const [showStructuralModal, setShowStructuralModal] = useState(false);
 
   // Material densities (kg/m³) - MUST match backend exactly
   const materialDensities = {
@@ -77,6 +81,8 @@ export default function AnalysisPanel() {
           material: selectedMaterial,
           results: result.mass_properties
         });
+
+        // Don't auto-open modal - keep STEP 2 below STEP 1
       } else {
         setMassPropertiesError(result.error || 'Failed to compute mass properties');
       }
@@ -100,20 +106,8 @@ export default function AnalysisPanel() {
       return;
     }
 
-    setSimulationLoading(true, 'structural');
-    try {
-      const result = await runStructuralSimulation(currentDesign);
-      if (result.success) {
-        addSimulationToHistory({
-          type: 'structural',
-          results: result.results
-        });
-      }
-    } catch (error) {
-      console.error('Structural simulation error:', error);
-    } finally {
-      setSimulationLoading(false, null);
-    }
+    // Open the structural analysis modal
+    setShowStructuralModal(true);
   };
 
   const handleRunDeflection = async () => {
@@ -172,6 +166,15 @@ export default function AnalysisPanel() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Structural Analysis Modal */}
+      {showStructuralModal && currentDesign && (
+        <StructuralAnalysisModal
+          design={currentDesign}
+          material={selectedMaterial}
+          onClose={() => setShowStructuralModal(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="relative">
         <div className="absolute -top-2 -right-2 w-20 h-20 bg-primary/20 rounded-full blur-3xl"></div>

@@ -1,6 +1,7 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useDesignStore } from '../store/designStore';
 
 function createGearGeometry(radius, thickness, teeth) {
   const shape = new THREE.Shape();
@@ -130,8 +131,18 @@ function createBracketGeometry(width, height, depth) {
 }
 
 export default function ComponentMesh({ design, autoRotate = true, showCenterLines = false }) {
+  const { stressResults, showStressVisualization } = useDesignStore();
   const meshRef = useRef();
   const heatmapRef = useRef();
+  
+  // Debug logging
+  useEffect(() => {
+    if (showStressVisualization && stressResults) {
+      console.log('ComponentMesh - Stress Results:', stressResults);
+      console.log('ComponentMesh - Safety Factor:', stressResults.safetyFactor);
+      console.log('ComponentMesh - Color:', getStressColor(stressResults.safetyFactor));
+    }
+  }, [showStressVisualization, stressResults]);
   const centerRef = useRef();
 
   const geometry = useMemo(() => {
@@ -213,6 +224,13 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
           parameters.width || parameters.size || 50,
           parameters.height || parameters.size || 50,
           parameters.depth || parameters.size || 50
+        );
+      case 'beam':
+        // Beam - elongated rectangular box (structural element)
+        return new THREE.BoxGeometry(
+          parameters.width || 50,
+          parameters.height || 50,
+          parameters.depth || parameters.length || 200
         );
       case 'prism':
         // Create triangular prism using extrusion
@@ -432,38 +450,46 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
   return (
     <group>
       <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-        {design.analysis ? (
-          <meshStandardMaterial 
-            vertexColors={true}
-            metalness={0.7} 
-            roughness={0.3}
-            envMapIntensity={0.8}
-          />
-        ) : (
-          <meshStandardMaterial 
-            color={getMaterialColor()}
-            metalness={0.9} 
-            roughness={0.1}
-            envMapIntensity={1}
-          />
-        )}
+        {/* Normal material color - no stress visualization */}
+        <meshStandardMaterial 
+          color={getMaterialColor()}
+          metalness={0.9} 
+          roughness={0.1}
+          envMapIntensity={1}
+        />
       </mesh>
-      
-      {/* Wireframe overlay for better visualization */}
-      {design.analysis && (
-        <mesh geometry={geometry} scale={1.002}>
-          <meshBasicMaterial 
-            ref={heatmapRef}
-            color="#ffffff"
-            transparent
-            opacity={0.7}
-            wireframe
-          />
-        </mesh>
-      )}
       
       {/* Dotted Center Axis Lines - Aligned to model center */}
       {centerLines}
     </group>
   );
+}
+
+// ANSYS-style stress color mapping function
+function getStressColor(safetyFactor) {
+  // Color scale from blue (safe) to red (unsafe)
+  // Safety Factor > 5: Blue (very safe)
+  // Safety Factor 2-5: Green (safe)
+  // Safety Factor 1-2: Yellow/Orange (marginal)
+  // Safety Factor < 1: Red (unsafe)
+  
+  // Handle undefined, null, or invalid values
+  if (!safetyFactor || isNaN(safetyFactor) || safetyFactor <= 0) {
+    console.warn('Invalid safety factor:', safetyFactor);
+    return '#888888'; // Gray for invalid/unknown
+  }
+  
+  if (safetyFactor >= 5) {
+    return '#0066ff'; // Blue - very safe
+  } else if (safetyFactor >= 3) {
+    return '#00cc00'; // Green - safe
+  } else if (safetyFactor >= 2) {
+    return '#88ff00'; // Light green - acceptable
+  } else if (safetyFactor >= 1.5) {
+    return '#ffff00'; // Yellow - marginal
+  } else if (safetyFactor >= 1) {
+    return '#ff8800'; // Orange - critical
+  } else {
+    return '#ff0000'; // Red - unsafe
+  }
 }

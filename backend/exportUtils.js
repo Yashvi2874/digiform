@@ -131,6 +131,13 @@ function createGeometry(design) {
         parameters.height || parameters.size || 50,
         parameters.depth || parameters.size || 50
       );
+    case 'beam':
+      // Beam is a rectangular box (elongated along one axis)
+      return new THREE.BoxGeometry(
+        parameters.width || 50,
+        parameters.height || 50,
+        parameters.depth || parameters.length || 200
+      );
     case 'cylinder':
       if (parameters.isHollow) {
         // Create hollow cylinder using LatheGeometry

@@ -32,7 +32,7 @@ function AutoRotateController({ enabled }) {
 }
 
 export default function Viewer3D() {
-  const { currentDesign } = useDesignStore();
+  const { currentDesign, stressResults, showStressVisualization } = useDesignStore();
   const hasAnalysis = currentDesign?.analysis;
   const [autoRotate, setAutoRotate] = useState(false);
 
