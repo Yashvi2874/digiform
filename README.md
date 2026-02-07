@@ -1,4 +1,5 @@
 # DigiForm - Where Ideas Take Shape
+<img width="2559" height="1308" alt="image" src="https://github.com/user-attachments/assets/2cc00ea3-5b98-419d-a41f-dea0312f56eb" />
 
 An AI-driven platform for designing and simulating industrial components using natural language. Built with React, Node.js, and MongoDB.
 
