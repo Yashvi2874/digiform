@@ -278,6 +278,13 @@ app.post('/api/simulate', async (req, res) => {
     
     // New mandatory execution order for mass properties
     if (simulationType === 'mass_properties') {
+      console.log('=== MASS PROPERTIES REQUEST RECEIVED ===');
+      console.log('Material:', material);
+      console.log('Design type:', design.type);
+      console.log('Design has parameters?', !!design.parameters);
+      console.log('Design has volume?', !!design.volume);
+      console.log('Design structure:', JSON.stringify(design, null, 2));
+      
       // STEP 1: Mass properties computation with MANDATORY unit conversion
 
       // Support both flat and nested design property shapes used across frontend
@@ -295,6 +302,9 @@ app.post('/api/simulate', async (req, res) => {
         const type = (design.type || '').toLowerCase();
         const params = design.parameters || {};
         
+        console.log('=== MASS PROPERTIES CALCULATION ===');
+        console.log('Design type:', type);
+        console.log('Design parameters:', JSON.stringify(params, null, 2));
         console.log('Calculating volume from geometry:', { type, params });
         
         switch (type) {
@@ -393,16 +403,32 @@ app.post('/api/simulate', async (req, res) => {
       }
       
       volumeVal = Number(volumeVal || 0);
+      console.log('Final volume value:', volumeVal, 'mm³');
+      console.log('Volume is finite?', Number.isFinite(volumeVal));
+      console.log('Volume > 0?', volumeVal > 0);
 
       // MANDATORY VALIDATION: Volume must be valid and positive
       if (!volumeVal || volumeVal <= 0 || !Number.isFinite(volumeVal)) {
+        console.error('=== VOLUME VALIDATION FAILED ===');
+        console.error('Volume value:', volumeVal);
+        console.error('Design type:', design.type);
+        console.error('Design parameters:', JSON.stringify(design.parameters, null, 2));
+        console.error('Full design object:', JSON.stringify(design, null, 2));
+        
         return res.status(400).json({
           success: false,
           error: 'Volume is zero or invalid. Cannot compute mass properties.',
           details: `CAD geometry must have valid volume (mm³) greater than zero. Type: ${design.type}, Parameters: ${JSON.stringify(design.parameters)}`,
           simulationType: 'mass_properties',
           step: 'STEP 1',
-          status: 'FAILED'
+          status: 'FAILED',
+          debug: {
+            volumeVal,
+            type: design.type,
+            parameters: design.parameters,
+            hasVolume: !!design.volume,
+            hasProperties: !!design.properties
+          }
         });
       }
 

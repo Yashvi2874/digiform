@@ -8,14 +8,9 @@ export const useDesignStore = create(
       currentDesign: null,
       userId: null,
       
-      // Phase 4: Simulation Control State
-      massProperties: null,
-      massPropertiesComputed: false,
-      massPropertiesLoading: false,
-      massPropertiesError: null,
+      // Phase 4: Simulation Control State - now per design
       selectedMaterial: 'Structural Steel',
       densityOverride: null,
-      simulationHistory: [],
       currentSimulationLoading: false,
       currentSimulationType: null,
       
@@ -36,13 +31,30 @@ export const useDesignStore = create(
         }
       },
 
-      addDesign: (design) => set((state) => ({
-        designs: [...state.designs, { ...design, id: Date.now(), timestamp: new Date() }],
-        currentDesign: { ...design, id: Date.now(), timestamp: new Date() }
-      })),
+      addDesign: (design) => set((state) => {
+        const newDesign = { 
+          ...design, 
+          id: Date.now(), 
+          timestamp: new Date(),
+          // Preserve existing simulationData if it exists, otherwise initialize
+          simulationData: design.simulationData || {
+            massProperties: null,
+            massPropertiesComputed: false,
+            massPropertiesError: null,
+            simulationHistory: []
+          }
+        };
+        return {
+          designs: [...state.designs, newDesign],
+          currentDesign: newDesign
+        };
+      }),
 
       setCurrentDesign: (id) => set((state) => ({
-        currentDesign: state.designs.find(d => d.id === id)
+        currentDesign: state.designs.find(d => d.id === id),
+        // Reset loading states when switching designs
+        currentSimulationLoading: false,
+        currentSimulationType: null
       })),
 
       updateDesignAnalysis: (id, analysis) => set((state) => ({
@@ -72,35 +84,95 @@ export const useDesignStore = create(
         currentDesign: null
       }),
 
-      // Phase 4: Simulation Control Actions
-      setMassProperties: (massProperties) => set({
-        massProperties,
-        massPropertiesComputed: true,
-        massPropertiesError: null
+      // Phase 4: Simulation Control Actions - now update current design's simulation data
+      setMassProperties: (massProperties) => set((state) => {
+        if (!state.currentDesign) return state;
+        
+        const updatedDesign = {
+          ...state.currentDesign,
+          simulationData: {
+            ...state.currentDesign.simulationData,
+            massProperties,
+            massPropertiesComputed: true,
+            massPropertiesError: null
+          }
+        };
+        
+        return {
+          designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+          currentDesign: updatedDesign
+        };
       }),
 
       setMassPropertiesLoading: (loading) => set({
-        massPropertiesLoading: loading,
         currentSimulationLoading: loading,
         currentSimulationType: loading ? 'mass_properties' : null
       }),
 
-      setMassPropertiesError: (error) => set({
-        massPropertiesError: error,
-        massPropertiesLoading: false,
-        currentSimulationLoading: false
+      setMassPropertiesError: (error) => set((state) => {
+        if (!state.currentDesign) return { 
+          currentSimulationLoading: false,
+          currentSimulationType: null
+        };
+        
+        const updatedDesign = {
+          ...state.currentDesign,
+          simulationData: {
+            ...state.currentDesign.simulationData,
+            massPropertiesError: error
+          }
+        };
+        
+        return {
+          designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+          currentDesign: updatedDesign,
+          currentSimulationLoading: false,
+          currentSimulationType: null
+        };
       }),
 
-      setSelectedMaterial: (material) => set({
-        selectedMaterial: material,
-        massPropertiesComputed: false,
-        massPropertiesError: null
+      setSelectedMaterial: (material) => set((state) => {
+        // Clear mass properties if material changes and they were already computed
+        if (state.currentDesign?.simulationData?.massPropertiesComputed) {
+          const updatedDesign = {
+            ...state.currentDesign,
+            simulationData: {
+              ...state.currentDesign.simulationData,
+              massPropertiesComputed: false,
+              massPropertiesError: 'Material changed. Please recompute STEP 1.'
+            }
+          };
+          
+          return {
+            selectedMaterial: material,
+            designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+            currentDesign: updatedDesign
+          };
+        }
+        
+        return { selectedMaterial: material };
       }),
 
-      setDensityOverride: (density) => set({
-        densityOverride: density,
-        massPropertiesComputed: false,
-        massPropertiesError: null
+      setDensityOverride: (density) => set((state) => {
+        // Clear mass properties if density changes and they were already computed
+        if (state.currentDesign?.simulationData?.massPropertiesComputed) {
+          const updatedDesign = {
+            ...state.currentDesign,
+            simulationData: {
+              ...state.currentDesign.simulationData,
+              massPropertiesComputed: false,
+              massPropertiesError: 'Density changed. Please recompute STEP 1.'
+            }
+          };
+          
+          return {
+            densityOverride: density,
+            designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+            currentDesign: updatedDesign
+          };
+        }
+        
+        return { densityOverride: density };
       }),
 
       setSimulationLoading: (loading, type) => set({
@@ -108,18 +180,49 @@ export const useDesignStore = create(
         currentSimulationType: type
       }),
 
-      addSimulationToHistory: (simulation) => set((state) => ({
-        simulationHistory: [...state.simulationHistory, {
+      addSimulationToHistory: (simulation) => set((state) => {
+        if (!state.currentDesign) return state;
+        
+        const newSimulation = {
           ...simulation,
           timestamp: new Date(),
           id: `${Date.now()}_${Math.random()}`
-        }]
-      })),
+        };
+        
+        const updatedDesign = {
+          ...state.currentDesign,
+          simulationData: {
+            ...state.currentDesign.simulationData,
+            simulationHistory: [
+              ...(state.currentDesign.simulationData?.simulationHistory || []),
+              newSimulation
+            ]
+          }
+        };
+        
+        return {
+          designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+          currentDesign: updatedDesign
+        };
+      }),
 
-      clearMassProperties: () => set({
-        massProperties: null,
-        massPropertiesComputed: false,
-        massPropertiesError: null
+      clearMassProperties: () => set((state) => {
+        if (!state.currentDesign) return state;
+        
+        const updatedDesign = {
+          ...state.currentDesign,
+          simulationData: {
+            ...state.currentDesign.simulationData,
+            massProperties: null,
+            massPropertiesComputed: false,
+            massPropertiesError: null
+          }
+        };
+        
+        return {
+          designs: state.designs.map(d => d.id === updatedDesign.id ? updatedDesign : d),
+          currentDesign: updatedDesign
+        };
       }),
 
       // Stress Visualization Actions
@@ -131,17 +234,66 @@ export const useDesignStore = create(
       clearStressVisualization: () => set({
         stressResults: null,
         showStressVisualization: false
-      })
+      }),
+
+      // Helper functions to get simulation data from current design
+      getMassProperties: () => {
+        const state = get();
+        return state.currentDesign?.simulationData?.massProperties || null;
+      },
+      
+      getMassPropertiesComputed: () => {
+        const state = get();
+        return state.currentDesign?.simulationData?.massPropertiesComputed || false;
+      },
+      
+      getMassPropertiesError: () => {
+        const state = get();
+        return state.currentDesign?.simulationData?.massPropertiesError || null;
+      },
+      
+      getSimulationHistory: () => {
+        const state = get();
+        return state.currentDesign?.simulationData?.simulationHistory || [];
+      }
     }),
     {
       name: 'digiform-designs',
-      version: 2,
-      // Partition storage by user ID
+      version: 3,
+      // Partition storage by user ID and include all design data with simulations
       partialize: (state) => ({
         designs: state.designs,
         currentDesign: state.currentDesign,
-        userId: state.userId
-      })
+        userId: state.userId,
+        selectedMaterial: state.selectedMaterial,
+        densityOverride: state.densityOverride
+      }),
+      // Migrate old designs to new structure
+      migrate: (persistedState, version) => {
+        if (version < 3) {
+          // Add simulationData to all existing designs
+          if (persistedState.designs) {
+            persistedState.designs = persistedState.designs.map(design => ({
+              ...design,
+              simulationData: design.simulationData || {
+                massProperties: null,
+                massPropertiesComputed: false,
+                massPropertiesError: null,
+                simulationHistory: []
+              }
+            }));
+          }
+          if (persistedState.currentDesign && !persistedState.currentDesign.simulationData) {
+            persistedState.currentDesign.simulationData = {
+              massProperties: null,
+              massPropertiesComputed: false,
+              massPropertiesError: null,
+              simulationHistory: []
+            };
+          }
+        }
+        return persistedState;
+      }
     }
   )
 );

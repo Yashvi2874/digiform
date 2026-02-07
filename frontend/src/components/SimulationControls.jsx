@@ -9,7 +9,6 @@ export default function SimulationControls({
   step1Complete = false, 
   onRunStructural = () => {},
   onRunDeflection = () => {},
-  onRunStress = () => {},
   loading = false,
   loadingType = null,
   error = null
@@ -17,8 +16,8 @@ export default function SimulationControls({
   const buttons = [
     {
       id: 'structural',
-      label: 'Run Structural Analysis',
-      description: 'Stress and strain analysis',
+      label: 'Run Structural & Stress Analysis',
+      description: 'Von Mises stress and strain analysis',
       onClick: onRunStructural,
       icon: '⚙️'
     },
@@ -28,13 +27,6 @@ export default function SimulationControls({
       description: 'Displacement under load',
       onClick: onRunDeflection,
       icon: '📏'
-    },
-    {
-      id: 'stress',
-      label: 'Run Stress Analysis',
-      description: 'Von Mises stress distribution',
-      onClick: onRunStress,
-      icon: '🔴'
     }
   ];
 

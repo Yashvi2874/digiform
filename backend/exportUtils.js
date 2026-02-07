@@ -31,10 +31,7 @@ function createGearGeometry(radius, thickness, teeth) {
   
   return new THREE.ExtrudeGeometry(shape, {
     depth: thickness,
-    bevelEnabled: true,
-    bevelThickness: 0.5,
-    bevelSize: 0.5,
-    bevelSegments: 2
+    bevelEnabled: false  // Sharp edges for industrial gears
   });
 }
 
@@ -77,10 +74,7 @@ function createBracketGeometry(width, height, depth) {
   
   return new THREE.ExtrudeGeometry(shape, {
     depth: depth,
-    bevelEnabled: true,
-    bevelThickness: 1,
-    bevelSize: 1,
-    bevelSegments: 2
+    bevelEnabled: false  // Sharp edges for industrial brackets
   });
 }
 

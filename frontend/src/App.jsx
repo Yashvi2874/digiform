@@ -64,7 +64,7 @@ function App() {
       
       <div className="flex h-[calc(100vh-80px)] relative">
         {/* Left Panel - Chat */}
-        <div className="w-96 bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-r border-primary/20 overflow-hidden shadow-2xl">
+        <div className="w-[450px] bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-r border-primary/20 overflow-hidden shadow-2xl">
           <ChatPanel />
         </div>
 
@@ -74,7 +74,7 @@ function App() {
         </div>
 
         {/* Right Panel - Analysis & Version Control */}
-        <div className="w-96 bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-l border-primary/20 overflow-y-auto shadow-2xl">
+        <div className="w-[450px] bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-l border-primary/20 overflow-y-auto shadow-2xl">
           {activeTab === 'design' && currentDesign && <AnalysisPanel />}
           {activeTab === 'versions' && <VersionControl />}
         </div>
