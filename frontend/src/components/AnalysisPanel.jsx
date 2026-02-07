@@ -60,6 +60,15 @@ export default function AnalysisPanel() {
     { value: 'backward', label: '-Z (Backward)', vector: [0, 0, -1] }
   ];
 
+  // Close structural analysis when switching designs or when STEP 1 is not complete
+  useEffect(() => {
+    if (!massPropertiesComputed) {
+      setShowStructuralAnalysis(false);
+      setStructuralResults(null);
+      setStructuralError(null);
+    }
+  }, [currentDesign?.id, massPropertiesComputed]);
+
   // Material densities (kg/m³) - MUST match backend exactly
   const materialDensities = {
     'Structural Steel': 7850,

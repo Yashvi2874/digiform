@@ -125,7 +125,9 @@ function createBracketGeometry(width, height, depth) {
 }
 
 export default function ComponentMesh({ design, autoRotate = true, showCenterLines = false }) {
-  const { stressResults, showStressVisualization } = useDesignStore();
+  const stressResults = useDesignStore(state => state.stressResults);
+  const showStressVisualization = useDesignStore(state => state.showStressVisualization);
+  const selectedMaterial = useDesignStore(state => state.selectedMaterial);
   const meshRef = useRef();
   const heatmapRef = useRef();
   
@@ -359,15 +361,44 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
   });
 
   const getMaterialColor = () => {
-    const material = design.material?.toLowerCase() || 'steel';
+    // Use selected material from store, fallback to design material
+    const material = (selectedMaterial || design.material || 'Steel').toLowerCase();
     const colors = {
-      steel: '#8b9dc3',
-      aluminum: '#c0c0c0',
-      titanium: '#878681',
-      brass: '#b5a642',
-      copper: '#b87333'
+      'steel': '#8b9dc3',
+      'structural steel': '#8b9dc3',
+      'stainless steel': '#c0c5ce',
+      'aluminum': '#d4d4d4',
+      'titanium': '#878681',
+      'brass': '#b5a642',
+      'copper': '#b87333',
+      'plastic': '#4a90e2',
+      'composite': '#2d3436',
+      'cast iron': '#5a5a5a',
+      'magnesium': '#b8b8b8'
     };
     return colors[material] || '#8b9dc3';
+  };
+
+  const getMaterialProperties = () => {
+    // Use selected material from store, fallback to design material
+    const material = (selectedMaterial || design.material || 'Steel').toLowerCase();
+    
+    // Different materials have different visual properties
+    const properties = {
+      'steel': { metalness: 0.9, roughness: 0.2 },
+      'structural steel': { metalness: 0.9, roughness: 0.2 },
+      'stainless steel': { metalness: 0.95, roughness: 0.1 },
+      'aluminum': { metalness: 0.85, roughness: 0.15 },
+      'titanium': { metalness: 0.8, roughness: 0.3 },
+      'brass': { metalness: 0.9, roughness: 0.25 },
+      'copper': { metalness: 0.95, roughness: 0.2 },
+      'plastic': { metalness: 0.1, roughness: 0.6 },
+      'composite': { metalness: 0.2, roughness: 0.7 },
+      'cast iron': { metalness: 0.7, roughness: 0.4 },
+      'magnesium': { metalness: 0.8, roughness: 0.25 }
+    };
+    
+    return properties[material] || { metalness: 0.9, roughness: 0.2 };
   };
 
   const getStressColor = (ratio) => {
@@ -441,14 +472,16 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
     );
   }, [centerRef.current, showCenterLines]);
 
+  const materialProps = getMaterialProperties();
+
   return (
     <group>
       <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-        {/* Normal material color - no stress visualization */}
+        {/* Material color and properties based on selected material */}
         <meshStandardMaterial 
           color={getMaterialColor()}
-          metalness={0.9} 
-          roughness={0.1}
+          metalness={materialProps.metalness} 
+          roughness={materialProps.roughness}
           envMapIntensity={1}
         />
       </mesh>

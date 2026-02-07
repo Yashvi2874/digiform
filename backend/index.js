@@ -733,12 +733,15 @@ app.post('/api/simulate', async (req, res) => {
         ]
       };
       
-      // Save analysis to database
+      // Save simulation data to database
       if (design.id) {
         try {
-          await db.saveAnalysis(design.id, massPropertiesResult);
+          // Update the design's simulationData in MongoDB
+          await db.updateMassProperties(design.id, massPropertiesResult.mass_properties, material);
+          console.log(`✓ Saved mass properties to database for design ${design.id}`);
         } catch (dbError) {
           console.error('Failed to save mass properties to DB:', dbError);
+          // Continue even if DB save fails
         }
       }
       
@@ -926,17 +929,17 @@ app.post('/api/structural-analysis', async (req, res) => {
     analysisResult.constraints = constraints;
     analysisResult.loads = loads;
     
-    // Save analysis to database if design has ID (skip for now to avoid validation errors)
-    if (design.id && false) { // Temporarily disabled
+    // Save structural analysis to database simulation history
+    if (design.id) {
       try {
-        await db.saveAnalysis(design.id, {
-          type: 'structural_analysis',
-          material: material, // Save material name as string
-          maxStress: analysisResult.results.maxVonMisesStress_MPa,
-          maxDisplacement: analysisResult.results.maxDisplacement_mm,
-          safetyFactor: analysisResult.results.safetyFactor,
-          status: analysisResult.results.status
+        await db.addSimulationToHistory(design.id, {
+          type: 'structural',
+          material: material,
+          results: analysisResult.results,
+          constraints: constraints,
+          loads: loads
         });
+        console.log(`✓ Saved structural analysis to database for design ${design.id}`);
       } catch (dbError) {
         console.error('Failed to save structural analysis to DB:', dbError);
         // Don't fail the request if DB save fails

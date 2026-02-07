@@ -47,6 +47,13 @@ const designSchema = new mongoose.Schema({
   approved: { type: Boolean, default: false },
   version: { type: Number, default: 1 },
   parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Design' },
+  // Simulation data stored per design
+  simulationData: {
+    massProperties: mongoose.Schema.Types.Mixed,
+    massPropertiesComputed: { type: Boolean, default: false },
+    massPropertiesError: String,
+    simulationHistory: [mongoose.Schema.Types.Mixed]
+  },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -219,7 +226,17 @@ export const getMessages = async (sessionId) => {
 };
 
 export const saveDesign = async (sessionId, messageId, design) => {
-  const newDesign = new Design({ sessionId, messageId, ...design });
+  const newDesign = new Design({ 
+    sessionId, 
+    messageId, 
+    ...design,
+    simulationData: design.simulationData || {
+      massProperties: null,
+      massPropertiesComputed: false,
+      massPropertiesError: null,
+      simulationHistory: []
+    }
+  });
   await newDesign.save();
   return newDesign._id.toString();
 };
@@ -258,4 +275,48 @@ export const saveCADFile = async (designId, format, filePath, fileSize) => {
 
 export const getCADFiles = async (designId) => {
   return await CADFile.find({ designId });
+};
+
+// Simulation data management
+export const saveSimulationData = async (designId, simulationData) => {
+  return await Design.findByIdAndUpdate(
+    designId, 
+    { simulationData },
+    { new: true }
+  );
+};
+
+export const getSimulationData = async (designId) => {
+  const design = await Design.findById(designId);
+  return design?.simulationData || null;
+};
+
+export const updateMassProperties = async (designId, massProperties, material) => {
+  return await Design.findByIdAndUpdate(
+    designId,
+    {
+      'simulationData.massProperties': massProperties,
+      'simulationData.massPropertiesComputed': true,
+      'simulationData.massPropertiesError': null
+    },
+    { new: true }
+  );
+};
+
+export const addSimulationToHistory = async (designId, simulation) => {
+  const design = await Design.findById(designId);
+  if (!design) return null;
+  
+  const simulationHistory = design.simulationData?.simulationHistory || [];
+  simulationHistory.push({
+    ...simulation,
+    timestamp: new Date(),
+    id: `${Date.now()}_${Math.random()}`
+  });
+  
+  return await Design.findByIdAndUpdate(
+    designId,
+    { 'simulationData.simulationHistory': simulationHistory },
+    { new: true }
+  );
 };

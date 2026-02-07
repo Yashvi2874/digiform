@@ -32,7 +32,10 @@ function AutoRotateController({ enabled }) {
 }
 
 export default function Viewer3D() {
-  const { currentDesign, stressResults, showStressVisualization } = useDesignStore();
+  const currentDesign = useDesignStore(state => state.currentDesign);
+  const selectedMaterial = useDesignStore(state => state.selectedMaterial);
+  const stressResults = useDesignStore(state => state.stressResults);
+  const showStressVisualization = useDesignStore(state => state.showStressVisualization);
   const hasAnalysis = currentDesign?.analysis;
   const [autoRotate, setAutoRotate] = useState(false);
 
@@ -68,7 +71,7 @@ export default function Viewer3D() {
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-gray-400">Material:</span>
                 <span className="text-white font-medium bg-gray-700 px-2 py-1 rounded">
-                  {currentDesign.material}
+                  {selectedMaterial || currentDesign.material}
                 </span>
               </div>
             </div>
@@ -103,7 +106,11 @@ export default function Viewer3D() {
                 shadow-mapSize-height={2048}
               />
               
-              <ComponentMesh design={currentDesign} autoRotate={autoRotate} />
+              <ComponentMesh 
+                key={`${currentDesign.id}-${selectedMaterial}`}
+                design={currentDesign} 
+                autoRotate={autoRotate} 
+              />
               
               {/* Reference Axes with Labels */}
               <ReferenceAxes size={50} />
