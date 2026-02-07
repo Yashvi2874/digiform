@@ -8,7 +8,6 @@ import { Zap, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 export default function SimulationControls({ 
   step1Complete = false, 
   onRunStructural = () => {},
-  onRunDeflection = () => {},
   loading = false,
   loadingType = null,
   error = null
@@ -20,13 +19,6 @@ export default function SimulationControls({
       description: 'Von Mises stress and strain analysis',
       onClick: onRunStructural,
       icon: '⚙️'
-    },
-    {
-      id: 'deflection',
-      label: 'Run Deflection Analysis',
-      description: 'Displacement under load',
-      onClick: onRunDeflection,
-      icon: '📏'
     }
   ];
 

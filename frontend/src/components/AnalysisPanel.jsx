@@ -227,33 +227,6 @@ export default function AnalysisPanel() {
     }
   };
 
-  const handleRunDeflection = async () => {
-    if (!massPropertiesComputed) {
-      setMassPropertiesError('STEP 1 (mass properties) required first');
-      return;
-    }
-
-    if (!currentDesign) {
-      setMassPropertiesError('No design available');
-      return;
-    }
-
-    setSimulationLoading(true, 'deflection');
-    try {
-      const result = await runDeflectionSimulation(currentDesign);
-      if (result.success) {
-        addSimulationToHistory({
-          type: 'deflection',
-          results: result.results
-        });
-      }
-    } catch (error) {
-      console.error('Deflection simulation error:', error);
-    } finally {
-      setSimulationLoading(false, null);
-    }
-  };
-
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
@@ -359,7 +332,6 @@ export default function AnalysisPanel() {
             <SimulationControls
               step1Complete={massPropertiesComputed}
               onRunStructural={handleRunStructural}
-              onRunDeflection={handleRunDeflection}
               loading={currentSimulationLoading}
               loadingType={currentSimulationType}
               error={massPropertiesComputed ? null : 'Complete STEP 1 first'}
