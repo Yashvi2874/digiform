@@ -91,4 +91,87 @@ export const rejectDesign = async (designId) => {
   return response.data;
 };
 
+// Phase 4: Simulation Control Endpoints
+export const runMassPropertiesSimulation = async (design, material = 'Structural Steel', densityOverride = null) => {
+  // Normalize design payload to ensure numeric fields (volume, surface area, COM, inertia)
+  const parseNumber = (v) => {
+    if (v === null || v === undefined) return undefined;
+    if (typeof v === 'number') return v;
+    const s = String(v).replace(/[^0-9.+-eE]/g, '');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const normalized = { ...design };
+  // volume may be at several paths
+  normalized.volume = parseNumber(design.volume)
+    || parseNumber(design.properties?.volume)
+    || parseNumber(design.properties?.volume_mm3)
+    || parseNumber(design.analysis?.mass_properties?.volume_mm3)
+    || 0;
+
+  normalized.surfaceArea = parseNumber(design.surfaceArea)
+    || parseNumber(design.properties?.surfaceArea)
+    || parseNumber(design.analysis?.mass_properties?.surface_area)
+    || 0;
+
+  // center of mass
+  const comSrc = design.centerOfMass || design.properties?.centerOfMass || design.analysis?.mass_properties?.center_of_mass;
+  normalized.centerOfMass = {
+    x: parseNumber(comSrc?.x || comSrc?.x_mm) || 0,
+    y: parseNumber(comSrc?.y || comSrc?.y_mm) || 0,
+    z: parseNumber(comSrc?.z || comSrc?.z_mm) || 0
+  };
+
+  // inertia
+  const inertiaSrc = design.inertia || design.properties?.inertia || design.analysis?.mass_properties?.moments_of_inertia;
+  normalized.inertia = {
+    Ixx: parseNumber(inertiaSrc?.Ixx || inertiaSrc?.Ixx_kg_mm2) || 0,
+    Iyy: parseNumber(inertiaSrc?.Iyy || inertiaSrc?.Iyy_kg_mm2) || 0,
+    Izz: parseNumber(inertiaSrc?.Izz || inertiaSrc?.Izz_kg_mm2) || 0
+  };
+
+  const response = await api.post('/api/simulate', {
+    design: normalized,
+    simulationType: 'mass_properties',
+    material,
+    densityOverride
+  });
+  return response.data;
+};
+
+export const runStructuralSimulation = async (design) => {
+  const response = await api.post('/api/simulate', {
+    design,
+    simulationType: 'structural'
+  });
+  return response.data;
+};
+
+export const runDeflectionSimulation = async (design) => {
+  const response = await api.post('/api/simulate', {
+    design,
+    simulationType: 'deflection'
+  });
+  return response.data;
+};
+
+export const runStressSimulation = async (design) => {
+  const response = await api.post('/api/simulate', {
+    design,
+    simulationType: 'stress'
+  });
+  return response.data;
+};
+
+export const getSimulationStatus = async (designId) => {
+  try {
+    const response = await api.get(`/api/simulate/status/${designId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get simulation status:', error);
+    return null;
+  }
+};
+
 export default api;

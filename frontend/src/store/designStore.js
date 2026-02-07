@@ -7,6 +7,17 @@ export const useDesignStore = create(
       designs: [],
       currentDesign: null,
       userId: null,
+      
+      // Phase 4: Simulation Control State
+      massProperties: null,
+      massPropertiesComputed: false,
+      massPropertiesLoading: false,
+      massPropertiesError: null,
+      selectedMaterial: 'Structural Steel',
+      densityOverride: null,
+      simulationHistory: [],
+      currentSimulationLoading: false,
+      currentSimulationType: null,
 
       // Initialize with user ID to ensure data isolation
       initializeForUser: (userId) => {
@@ -55,6 +66,56 @@ export const useDesignStore = create(
       clearDesigns: () => set({
         designs: [],
         currentDesign: null
+      }),
+
+      // Phase 4: Simulation Control Actions
+      setMassProperties: (massProperties) => set({
+        massProperties,
+        massPropertiesComputed: true,
+        massPropertiesError: null
+      }),
+
+      setMassPropertiesLoading: (loading) => set({
+        massPropertiesLoading: loading,
+        currentSimulationLoading: loading,
+        currentSimulationType: loading ? 'mass_properties' : null
+      }),
+
+      setMassPropertiesError: (error) => set({
+        massPropertiesError: error,
+        massPropertiesLoading: false,
+        currentSimulationLoading: false
+      }),
+
+      setSelectedMaterial: (material) => set({
+        selectedMaterial: material,
+        massPropertiesComputed: false,
+        massPropertiesError: null
+      }),
+
+      setDensityOverride: (density) => set({
+        densityOverride: density,
+        massPropertiesComputed: false,
+        massPropertiesError: null
+      }),
+
+      setSimulationLoading: (loading, type) => set({
+        currentSimulationLoading: loading,
+        currentSimulationType: type
+      }),
+
+      addSimulationToHistory: (simulation) => set((state) => ({
+        simulationHistory: [...state.simulationHistory, {
+          ...simulation,
+          timestamp: new Date(),
+          id: `${Date.now()}_${Math.random()}`
+        }]
+      })),
+
+      clearMassProperties: () => set({
+        massProperties: null,
+        massPropertiesComputed: false,
+        massPropertiesError: null
       })
     }),
     {
