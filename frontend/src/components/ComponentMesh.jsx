@@ -128,7 +128,7 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
   const showStressVisualization = useDesignStore(state => state.showStressVisualization);
   const selectedMaterial = useDesignStore(state => state.selectedMaterial);
   const meshRef = useRef();
-  const heatmapRef = useRef();
+  const stressOverlayRef = useRef();
   
   // Debug logging
   useEffect(() => {
@@ -314,7 +314,7 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
     }
   }, [geometry]);
 
-  // Create vertex colors for heatmap
+  // Create vertex colors for stress distribution visualization
   useEffect(() => {
     if (design.analysis?.stressDistribution && meshRef.current) {
       const geo = meshRef.current.geometry;
@@ -350,10 +350,10 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
       meshRef.current.rotation.y = state.clock.getElapsedTime() * 0.3;
     }
     
-    // Animate heatmap pulsing if analysis exists
-    if (heatmapRef.current && design.analysis) {
+    // Animate stress overlay pulsing if analysis exists
+    if (stressOverlayRef.current && design.analysis) {
       const pulse = Math.sin(state.clock.getElapsedTime() * 2) * 0.5 + 0.5;
-      heatmapRef.current.opacity = 0.6 + pulse * 0.2;
+      stressOverlayRef.current.opacity = 0.6 + pulse * 0.2;
     }
   });
 
@@ -680,7 +680,7 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
         />
       </mesh>
       
-      {/* Semi-transparent stress heatmap overlay - only when visualization is enabled */}
+      {/* Semi-transparent stress distribution overlay - only when visualization is enabled */}
       {shouldShowStressColors && (
         <mesh 
           geometry={stressColoredGeometry} 

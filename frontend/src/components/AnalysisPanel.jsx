@@ -520,9 +520,9 @@ export default function AnalysisPanel() {
                     {/* Stress Visualization Toggle Button */}
                     <div className="flex items-center justify-between p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
                       <div>
-                        <p className="text-sm font-semibold text-purple-300">Visual Stress Heatmap</p>
+                        <p className="text-sm font-semibold text-purple-300">Stress Distribution Visualization</p>
                         <p className="text-xs text-purple-200 mt-1">
-                          Display face-wise stress heatmap with semi-transparent overlay on CAD model
+                          Display face-wise stress distribution with semi-transparent overlay on CAD model
                         </p>
                       </div>
                       <button
@@ -533,7 +533,7 @@ export default function AnalysisPanel() {
                             : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
                       >
-                        {showStressVisualization ? '✓ Showing' : 'See Heatmap'}
+                        {showStressVisualization ? '✓ Showing' : 'Show Distribution'}
                       </button>
                     </div>
 
@@ -542,7 +542,7 @@ export default function AnalysisPanel() {
                       <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
                         <p className="text-sm font-semibold text-purple-300 flex items-center gap-2">
                           <span>🎨</span>
-                          <span>Stress Heatmap Overlay Active</span>
+                          <span>Stress Distribution Overlay Active</span>
                         </p>
                         <p className="text-xs text-purple-200 mt-1">
                           Semi-transparent stress colors are overlaid on the CAD model's material. 
@@ -617,7 +617,7 @@ export default function AnalysisPanel() {
                     {/* Stress Heatmap Visualization - Only show when enabled */}
                     {showStressVisualization && (
                       <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-                        <p className="text-sm font-semibold text-gray-200 mb-3">Stress Distribution Heatmap</p>
+                        <p className="text-sm font-semibold text-gray-200 mb-3">Mechanical Stress Distribution</p>
                         <p className="text-xs text-gray-400 mb-3">Color-coded stress levels on each surface</p>
                       
                       {/* Color Legend */}

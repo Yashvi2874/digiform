@@ -10,13 +10,17 @@ An AI-driven platform for designing and simulating industrial components using n
 ## ✨ Features
 
 - 🤖 **Conversational AI Assistant** - Natural language design interface
-- 🎨 **Real-time 3D Visualization** - Interactive Three.js viewer with stress heatmaps
-- 🔬 **Engineering Simulation** - Stress analysis, safety factors, load-based calculations
-- 📥 **Multi-Format Export** - STL, GLB, OBJ, STEP file generation
+- 🎨 **Real-time 3D Visualization** - Interactive Three.js viewer with stress distribution
+- 🔬 **Engineering Simulation** - Structural & stress analysis with safety factors
+- 📊 **Stress Distribution Visualization** - Face-wise mechanical stress analysis with color-coded overlay
+- 📥 **Multi-Format Export** - STL, GLTF, OBJ file generation
 - 💾 **Cloud Database** - MongoDB Atlas for persistent storage
-- 🔄 **Version Control** - Track all design iterations
-- ✅ **Approval Workflow** - Review and approve designs before proceeding
-- 📊 **Performance Analysis** - Real-time structural integrity assessment
+- 🔄 **Version Control** - Track and manage all design iterations
+- 🎯 **Material Library** - Steel, Aluminum, Titanium, Brass, Copper, Plastic, Composite
+- 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
+- 🔐 **User Authentication** - Secure login and data isolation
+- � **Chat History** - Save and restore previous design sessions
+- 🎨 **Material Visualization** - Realistic material colors and properties in 3D
 
 ## 🏗️ Architecture
 
@@ -88,34 +92,6 @@ digiform/
 └── docs/              # Documentation
 ```
 
-See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for detailed structure.
-
-## 🌐 Deployment
-
-### Option 1: Vercel + Render + MongoDB Atlas (Recommended)
-
-**Perfect for production with:**
-- ✅ Automatic deployments
-- ✅ Global CDN
-- ✅ Serverless functions
-- ✅ Free tier available
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step guide.
-
-### Quick Deploy Commands
-
-**Frontend (Vercel)**
-```bash
-cd frontend
-vercel --prod
-```
-
-**Backend (Render)**
-- Connect GitHub repository
-- Set root directory to `backend`
-- Add environment variables
-- Deploy
-
 ## 🎯 Usage Examples
 
 ### Design a Component
@@ -140,13 +116,15 @@ AI: "I've updated the design with the following changes:
 ```
 
 ### Run Simulation
-1. Approve your design
-2. Click "Run Simulation"
-3. Enter load conditions (force & area)
-4. View stress heatmap and analysis
+1. Complete STEP 1: Mass Properties calculation
+2. Click "Structural & Stress Analysis" in STEP 2
+3. Configure constraints (fixed face) and loads (force, direction, face)
+4. Click "Run Analysis"
+5. View results: max stress, displacement, safety factor
+6. Optional: Click "Show Distribution" to see stress visualization on 3D model
 
 ### Export CAD
-- Click format button (STL, GLB, OBJ, STEP)
+- Click format button (STL, GLTF, OBJ)
 - File downloads automatically
 - Use in 3D printing, CAD software, or web apps
 
@@ -167,14 +145,24 @@ NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url.com
 ```
 
-## 📚 Documentation
+### Code Quality
 
-- [Deployment Guide](DEPLOYMENT.md) - Step-by-step deployment instructions
-- [Project Structure](PROJECT_STRUCTURE.md) - Detailed code organization
-- [API Documentation](docs/API.md) - API endpoints and usage
-- [Chat System](CHAT_SYSTEM.md) - Conversational AI details
-- [Simulation Features](SIMULATION_FEATURES.md) - Engineering analysis
-- [Export Features](EXPORT_FEATURES.md) - CAD export capabilities
+The codebase includes test files for development purposes. For production deployment:
+
+**Optional Cleanup (Backend):**
+```bash
+# Remove test files (optional - they don't affect production)
+cd backend
+rm test_*.js test_*.py
+```
+
+**Code Standards:**
+- ✅ No console errors or warnings
+- ✅ Responsive design (mobile, tablet, desktop)
+- ✅ User data isolation and security
+- ✅ Persistent state management
+- ✅ Error handling and validation
+- ✅ Clean component architecture
 
 ## 🛠️ Tech Stack
 
@@ -210,7 +198,7 @@ FRONTEND_URL=https://your-frontend-url.com
 ### 3D Visualization
 - Real-time rendering
 - Orbit controls
-- Stress heatmaps
+- Stress distribution visualization
 - Material-accurate colors
 - Auto-rotation control
 
@@ -223,9 +211,8 @@ FRONTEND_URL=https://your-frontend-url.com
 
 ### CAD Export
 - STL for 3D printing
-- GLB for web/AR/VR
+- GLTF for web/AR/VR
 - OBJ for universal use
-- STEP for CAD software
 
 ### Database Persistence
 - Session management
@@ -244,10 +231,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🙏 Acknowledgments
 
 - Three.js community for 3D graphics
@@ -257,20 +240,29 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@digiform.app
-- 💬 Discord: [Join our community](https://discord.gg/digiform)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/digiform/issues)
+- 📧 Email: yashasvigupta28@gmail.com
 
 ## 🗺️ Roadmap
 
-- [ ] Multi-user collaboration
+- [x] Natural language CAD design
+- [x] Real-time 3D visualization
+- [x] Structural & stress analysis
+- [x] Face-wise stress distribution visualization
+- [x] Material library with visual representation
+- [x] Multi-format export (STL, GLTF, OBJ)
+- [x] User authentication and data isolation
+- [x] Chat history and session management
+- [x] Version control for designs
+- [x] Responsive UI (mobile, tablet, desktop)
+- [x] Simulation data persistence per design
 - [ ] Advanced FEA integration
 - [ ] Assembly modeling
 - [ ] Manufacturing cost estimation
-- [ ] Mobile app
+- [ ] Mobile app (native)
 - [ ] API for third-party integration
 - [ ] Marketplace for designs
 - [ ] AI-powered optimization suggestions
+- [ ] Multi-user collaboration
 
 ---
 

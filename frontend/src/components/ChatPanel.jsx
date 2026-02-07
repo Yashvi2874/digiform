@@ -173,42 +173,42 @@ export default function ChatPanel() {
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-dark to-dark-light">
       {/* Chat Header */}
-      <div className="p-4 border-b border-gray-700 bg-dark-light/50 backdrop-blur-sm">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
-            <Bot className="w-6 h-6 text-white" />
+      <div className="p-3 md:p-4 border-b border-gray-700 bg-dark-light/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+          <div className="p-1.5 md:p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+            <Bot className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-base leading-tight">DigiForm AI Assistant</h2>
-            <p className="text-[10px] text-gray-400 leading-tight">Your intelligent design companion</p>
+            <h2 className="font-bold text-sm md:text-base leading-tight">DigiForm AI Assistant</h2>
+            <p className="text-[9px] md:text-[10px] text-gray-400 leading-tight">Your intelligent design companion</p>
           </div>
         </div>
         
         {/* Chat Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
           <button
             onClick={() => setShowHistory(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-semibold transition"
+            className="flex-1 flex items-center justify-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-[10px] md:text-xs font-semibold transition"
             title="View chat history"
           >
-            <History className="w-3.5 h-3.5" />
-            <span>History</span>
+            <History className="w-3 h-3 md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">History</span>
           </button>
           <button
             onClick={handleNewChat}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition"
+            className="flex-1 flex items-center justify-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] md:text-xs font-semibold transition"
             title="Start new chat (saves current)"
           >
-            <MessageSquarePlus className="w-3.5 h-3.5" />
-            <span>New Chat</span>
+            <MessageSquarePlus className="w-3 h-3 md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">New Chat</span>
           </button>
           <button
             onClick={() => setShowConfirm(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition"
+            className="flex-1 flex items-center justify-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] md:text-xs font-semibold transition"
             title="Clear chat and delete from database"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear</span>
+            <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">Clear</span>
           </button>
         </div>
       </div>
@@ -415,30 +415,30 @@ export default function ChatPanel() {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-700 bg-dark-light/50 backdrop-blur-sm">
+      <div className="p-3 md:p-4 border-t border-gray-700 bg-dark-light/50 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Describe your component or ask a question..."
-            className="flex-1 bg-dark border-2 border-gray-700 focus:border-primary rounded-xl px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none"
+            placeholder="Describe your component..."
+            className="flex-1 bg-dark border-2 border-gray-700 focus:border-primary rounded-xl px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-white placeholder:text-gray-500 focus:outline-none"
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary disabled:from-gray-700 disabled:to-gray-600 disabled:cursor-not-allowed px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition shadow-lg"
+            className="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary disabled:from-gray-700 disabled:to-gray-600 disabled:cursor-not-allowed px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold flex items-center gap-2 transition shadow-lg"
           >
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
             ) : (
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4 md:w-5 md:h-5" />
             )}
           </button>
         </form>
-        <p className="text-xs text-gray-500 mt-2 text-center">
-          💡 Try: "Design a gear with 20 teeth" or "Make it aluminum instead"
+        <p className="text-[10px] md:text-xs text-gray-500 mt-2 text-center">
+          💡 Try: "Design a gear with 20 teeth" or "Make it aluminum"
         </p>
       </div>
 

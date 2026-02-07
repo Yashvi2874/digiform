@@ -113,7 +113,7 @@ export async function simulateComponent(design) {
   if (stress > props.yieldStrength * 0.8) warnings.push('High stress levels detected - component may yield under load');
   if (deformation > 1) warnings.push('Significant deformation expected - consider stiffer design');
 
-  // Generate stress distribution data for heatmap
+  // Generate stress distribution data for visualization
   const stressDistribution = generateStressDistribution(stress, props.yieldStrength);
 
   return {

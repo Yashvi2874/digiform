@@ -232,7 +232,7 @@ Just click the export button in the Analysis panel!`;
 1. Approve your design first
 2. Click "Run Simulation" in the Analysis panel
 3. Enter the load conditions (force and area)
-4. I'll calculate stress, safety factors, and show a heatmap
+4. I'll calculate stress, safety factors, and show stress distribution
 
 The simulation will help you understand if your design can handle the expected loads.`;
   }
