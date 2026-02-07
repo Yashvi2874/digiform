@@ -3,9 +3,23 @@ import { persist } from 'zustand/middleware';
 
 export const useDesignStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       designs: [],
       currentDesign: null,
+      userId: null,
+
+      // Initialize with user ID to ensure data isolation
+      initializeForUser: (userId) => {
+        const currentUserId = get().userId;
+        if (currentUserId !== userId) {
+          // Different user - clear all data
+          set({
+            designs: [],
+            currentDesign: null,
+            userId
+          });
+        }
+      },
 
       addDesign: (design) => set((state) => ({
         designs: [...state.designs, { ...design, id: Date.now(), timestamp: new Date() }],
@@ -45,7 +59,13 @@ export const useDesignStore = create(
     }),
     {
       name: 'digiform-designs',
-      version: 1
+      version: 2,
+      // Partition storage by user ID
+      partialize: (state) => ({
+        designs: state.designs,
+        currentDesign: state.currentDesign,
+        userId: state.userId
+      })
     }
   )
 );

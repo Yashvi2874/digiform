@@ -8,7 +8,7 @@ export default function ExportPanel({ design }) {
 
   const formats = [
     { value: 'stl', label: 'STL', description: '3D printing, slicing software' },
-    { value: 'glb', label: 'GLB', description: 'Web, AR/VR, Blender' },
+    { value: 'glb', label: 'GLTF', description: 'Web, AR/VR, Blender' },
     { value: 'obj', label: 'OBJ', description: 'Universal 3D format' },
     { value: 'step', label: 'STEP', description: 'CAD software (SolidWorks, Fusion)' }
   ];
@@ -83,7 +83,7 @@ export default function ExportPanel({ design }) {
       
       <div className="mt-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
         <p className="text-xs text-gray-300">
-          💡 <strong>Tip:</strong> STL for 3D printing, GLB for web/AR, STEP for CAD editing
+          💡 <strong>Tip:</strong> STL for 3D printing, GLTF for web/AR, STEP for CAD editing
         </p>
       </div>
     </div>

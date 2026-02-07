@@ -201,23 +201,55 @@ function createGeometry(design) {
 export async function exportToSTL(design) {
   try {
     const geometry = createGeometry(design);
+    
+    // Ensure geometry is valid
+    if (!geometry) {
+      throw new Error('Failed to create geometry for design type: ' + design.type);
+    }
+    
     const mesh = new THREE.Mesh(geometry);
-    
     const exporter = new STLExporter();
-    const stlData = exporter.parse(mesh, { binary: true });
     
-    // STLExporter returns ArrayBuffer or Uint8Array
+    // Parse with binary option
+    let stlData;
+    try {
+      stlData = exporter.parse(mesh, { binary: true });
+    } catch (parseError) {
+      console.error('STL parse error, trying ASCII mode:', parseError);
+      // Fallback to ASCII mode
+      stlData = exporter.parse(mesh, { binary: false });
+    }
+    
+    // Check if we got valid data
+    if (!stlData) {
+      throw new Error('STL exporter returned null or undefined');
+    }
+    
+    // Convert to Buffer based on data type
     if (stlData instanceof ArrayBuffer) {
       return Buffer.from(stlData);
     } else if (stlData instanceof Uint8Array) {
       return Buffer.from(stlData);
     } else if (typeof stlData === 'string') {
-      return Buffer.from(stlData);
+      return Buffer.from(stlData, 'utf-8');
+    } else if (typeof stlData === 'object' && stlData.buffer) {
+      // Handle DataView or similar objects with buffer property
+      return Buffer.from(stlData.buffer);
+    } else if (typeof stlData === 'object') {
+      // STLExporter sometimes returns the geometry object in Node.js
+      // Try ASCII mode as fallback
+      console.log('STL returned object, trying ASCII mode');
+      const asciiData = exporter.parse(mesh, { binary: false });
+      if (typeof asciiData === 'string') {
+        return Buffer.from(asciiData, 'utf-8');
+      }
+      throw new Error('STL export failed: Cannot convert object to buffer');
     } else {
       throw new Error('Unexpected STL export data type: ' + typeof stlData);
     }
   } catch (error) {
     console.error('STL export error:', error);
+    console.error('Design:', JSON.stringify(design, null, 2));
     throw error;
   }
 }
@@ -226,12 +258,19 @@ export async function exportToGLB(design) {
   return new Promise((resolve, reject) => {
     try {
       const geometry = createGeometry(design);
+      
+      if (!geometry) {
+        reject(new Error('Failed to create geometry for design type: ' + design.type));
+        return;
+      }
+      
       const material = new THREE.MeshStandardMaterial({ 
         color: 0x8b9dc3,
         metalness: 0.9,
         roughness: 0.1
       });
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = design.type || 'component';
       
       // Create a scene to hold the mesh
       const scene = new THREE.Scene();
@@ -239,33 +278,46 @@ export async function exportToGLB(design) {
       
       const exporter = new GLTFExporter();
       
-      // Use onlyVisible: false to avoid FileReader issues
+      // Export as JSON first (doesn't use FileReader)
       exporter.parse(
         scene,
-        (result) => {
+        (gltfJson) => {
           try {
-            if (result instanceof ArrayBuffer) {
-              resolve(Buffer.from(result));
-            } else {
-              // For JSON format, convert to string then buffer
-              const jsonString = JSON.stringify(result);
-              resolve(Buffer.from(jsonString));
+            if (!gltfJson) {
+              reject(new Error('GLB exporter returned null or undefined'));
+              return;
             }
+            
+            // Convert JSON to string and then to buffer
+            // This creates a GLTF file (JSON format) instead of GLB (binary)
+            // But it's still compatible with most 3D viewers
+            const jsonString = JSON.stringify(gltfJson, null, 2);
+            const buffer = Buffer.from(jsonString, 'utf-8');
+            
+            if (buffer.length === 0) {
+              reject(new Error('GLB export produced empty buffer'));
+              return;
+            }
+            
+            resolve(buffer);
           } catch (conversionError) {
             reject(conversionError);
           }
         },
         (error) => {
+          console.error('GLB parse error:', error);
           reject(error);
         },
         { 
-          binary: true,
+          binary: false, // Use JSON format to avoid FileReader
           onlyVisible: false,
           embedImages: false,
           truncateDrawRange: false
         }
       );
     } catch (error) {
+      console.error('GLB export error:', error);
+      console.error('Design:', JSON.stringify(design, null, 2));
       reject(error);
     }
   });

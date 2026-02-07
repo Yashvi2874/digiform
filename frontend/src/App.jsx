@@ -15,6 +15,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { currentDesign } = useDesignStore();
   const { sessionId, userId, initSession, clearAll } = useChatStore();
+  const { initializeForUser, clearDesigns } = useDesignStore();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -24,8 +25,10 @@ function App() {
       const userData = JSON.parse(savedUser);
       setUser(userData);
       setIsAuthenticated(true);
+      // Initialize design store for this user
+      initializeForUser(userData.id);
     }
-  }, []);
+  }, [initializeForUser]);
 
   // Don't create session automatically - let ChatPanel create it on first message
 
@@ -33,6 +36,8 @@ function App() {
     setUser(userData);
     setIsAuthenticated(true);
     clearAll();
+    // Initialize design store for new user
+    initializeForUser(userData.id);
   };
 
   const handleLogout = () => {
@@ -41,6 +46,7 @@ function App() {
     setUser(null);
     setIsAuthenticated(false);
     clearAll();
+    clearDesigns(); // Clear designs on logout
   };
 
   if (!isAuthenticated) {

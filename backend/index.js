@@ -293,9 +293,9 @@ app.post('/api/export', async (req, res) => {
         break;
       case 'glb':
         buffer = await exportToGLB(design);
-        contentType = 'model/gltf-binary';
-        filename += '.glb';
-        console.log(`GLB buffer size: ${buffer.length} bytes`);
+        contentType = 'model/gltf+json'; // Changed to JSON format
+        filename += '.gltf'; // Changed extension to .gltf
+        console.log(`GLTF buffer size: ${buffer.length} bytes`);
         break;
       case 'obj':
         buffer = await exportToOBJ(design);
