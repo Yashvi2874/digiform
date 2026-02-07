@@ -460,36 +460,60 @@ app.post('/api/simulate', async (req, res) => {
       // Center of mass extraction - default to geometric center (0,0,0)
       const comObj = design.centerOfMass || extract(design, 'properties.centerOfMass') || extract(design, 'analysis.mass_properties.center_of_mass') || { x: 0, y: 0, z: 0 };
 
-      // Moments of inertia extraction - calculate basic approximations if not provided
+      // Moments of inertia extraction - calculate using proper formulas if not provided
       let inertiaObj = design.inertia || extract(design, 'properties.inertia') || extract(design, 'analysis.mass_properties.moments_of_inertia') || {};
       
-      // Calculate basic moments of inertia if not provided
+      // Calculate moments of inertia using proper geometric formulas if not provided
+      // These are the coefficients that will be multiplied by mass later
       if (!inertiaObj.Ixx && !inertiaObj.Ixx_kg_mm2) {
         const type = (design.type || '').toLowerCase();
         const params = design.parameters || {};
         
-        // Simplified MOI calculations (will be multiplied by mass later)
+        // MOI formulas for each shape (coefficients only, will multiply by mass later)
         switch (type) {
           case 'cube':
+          case 'bracket':
+          case 'plate':
+            // Cuboid (Rectangular Prism)
             const w = params.width || params.size || 50;
             const h = params.height || params.size || 50;
-            const d = params.depth || params.size || 50;
-            // For a rectangular solid: I = (1/12) * m * (h² + d²)
+            const d = params.depth || params.thickness || params.size || 50;
+            // For a rectangular solid about center:
+            // Ixx = (1/12) * m * (h² + d²)
+            // Iyy = (1/12) * m * (w² + d²)
+            // Izz = (1/12) * m * (w² + h²)
             inertiaObj.Ixx = (Math.pow(h, 2) + Math.pow(d, 2)) / 12;
             inertiaObj.Iyy = (Math.pow(w, 2) + Math.pow(d, 2)) / 12;
             inertiaObj.Izz = (Math.pow(w, 2) + Math.pow(h, 2)) / 12;
             break;
             
           case 'cylinder':
+          case 'shaft':
+            // Solid Cylinder (axis along Z)
             const r = params.radius || 25;
             const cylH = params.height || params.length || 50;
-            // For a cylinder: Ixx = Iyy = (1/12) * m * (3r² + h²), Izz = (1/2) * m * r²
-            inertiaObj.Ixx = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
-            inertiaObj.Iyy = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
-            inertiaObj.Izz = Math.pow(r, 2) / 2;
+            
+            if (params.isHollow && params.innerRadius) {
+              // Hollow Cylinder
+              const R = r; // outer radius
+              const r_inner = params.innerRadius;
+              // Ixx = Iyy = (1/12) * m * (3(R² + r²) + h²)
+              // Izz = (1/2) * m * (R² + r²)
+              inertiaObj.Ixx = (3 * (Math.pow(R, 2) + Math.pow(r_inner, 2)) + Math.pow(cylH, 2)) / 12;
+              inertiaObj.Iyy = (3 * (Math.pow(R, 2) + Math.pow(r_inner, 2)) + Math.pow(cylH, 2)) / 12;
+              inertiaObj.Izz = (Math.pow(R, 2) + Math.pow(r_inner, 2)) / 2;
+            } else {
+              // Solid Cylinder
+              // Ixx = Iyy = (1/12) * m * (3r² + h²)
+              // Izz = (1/2) * m * r²
+              inertiaObj.Ixx = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
+              inertiaObj.Iyy = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
+              inertiaObj.Izz = Math.pow(r, 2) / 2;
+            }
             break;
             
           case 'sphere':
+            // Solid Sphere
             const sR = params.radius || 25;
             // For a sphere: I = (2/5) * m * r²
             const sphereI = (2/5) * Math.pow(sR, 2);
@@ -498,11 +522,78 @@ app.post('/api/simulate', async (req, res) => {
             inertiaObj.Izz = sphereI;
             break;
             
+          case 'cone':
+            // Solid Cone (apex at top, base at bottom, axis along Z)
+            const coneR = params.baseRadius || params.radius || 25;
+            const coneH = params.height || 50;
+            // Ixx = Iyy = (3/80) * m * (4r² + h²)
+            // Izz = (3/10) * m * r²
+            inertiaObj.Ixx = (3/80) * (4 * Math.pow(coneR, 2) + Math.pow(coneH, 2));
+            inertiaObj.Iyy = (3/80) * (4 * Math.pow(coneR, 2) + Math.pow(coneH, 2));
+            inertiaObj.Izz = (3/10) * Math.pow(coneR, 2);
+            break;
+            
+          case 'pyramid':
+            // Square Pyramid (apex at top, base at bottom)
+            const baseW = params.baseWidth || 30;
+            const baseD = params.baseDepth || 30;
+            const pyrH = params.height || 40;
+            // Approximation for square pyramid:
+            // Ixx = (1/20) * m * (baseD² + 3h²)
+            // Iyy = (1/20) * m * (baseW² + 3h²)
+            // Izz = (1/10) * m * (baseW² + baseD²)
+            inertiaObj.Ixx = (Math.pow(baseD, 2) + 3 * Math.pow(pyrH, 2)) / 20;
+            inertiaObj.Iyy = (Math.pow(baseW, 2) + 3 * Math.pow(pyrH, 2)) / 20;
+            inertiaObj.Izz = (Math.pow(baseW, 2) + Math.pow(baseD, 2)) / 10;
+            break;
+            
+          case 'prism':
+            // Triangular Prism
+            const prismBase = params.baseWidth || 30;
+            const prismHeight = params.baseHeight || 30;
+            const prismLength = params.length || 50;
+            // Approximation for triangular prism:
+            // Ixx = (1/18) * m * (prismHeight² + prismLength²)
+            // Iyy = (1/18) * m * (prismBase² + prismLength²)
+            // Izz = (1/18) * m * (prismBase² + prismHeight²)
+            inertiaObj.Ixx = (Math.pow(prismHeight, 2) + Math.pow(prismLength, 2)) / 18;
+            inertiaObj.Iyy = (Math.pow(prismBase, 2) + Math.pow(prismLength, 2)) / 18;
+            inertiaObj.Izz = (Math.pow(prismBase, 2) + Math.pow(prismHeight, 2)) / 18;
+            break;
+            
+          case 'gear':
+            // Gear approximated as solid cylinder
+            const gearR = params.radius || 25;
+            const gearT = params.thickness || 10;
+            inertiaObj.Ixx = (3 * Math.pow(gearR, 2) + Math.pow(gearT, 2)) / 12;
+            inertiaObj.Iyy = (3 * Math.pow(gearR, 2) + Math.pow(gearT, 2)) / 12;
+            inertiaObj.Izz = Math.pow(gearR, 2) / 2;
+            break;
+            
+          case 'bearing':
+            // Bearing as hollow cylinder
+            const bearingR = params.outerRadius || params.radius || 30;
+            const bearingRinner = params.innerRadius || bearingR * 0.5;
+            const bearingT = params.thickness || 10;
+            inertiaObj.Ixx = (3 * (Math.pow(bearingR, 2) + Math.pow(bearingRinner, 2)) + Math.pow(bearingT, 2)) / 12;
+            inertiaObj.Iyy = (3 * (Math.pow(bearingR, 2) + Math.pow(bearingRinner, 2)) + Math.pow(bearingT, 2)) / 12;
+            inertiaObj.Izz = (Math.pow(bearingR, 2) + Math.pow(bearingRinner, 2)) / 2;
+            break;
+            
+          case 'bolt':
+            // Bolt approximated as solid cylinder
+            const boltR = params.radius || 4;
+            const boltL = params.length || 30;
+            inertiaObj.Ixx = (3 * Math.pow(boltR, 2) + Math.pow(boltL, 2)) / 12;
+            inertiaObj.Iyy = (3 * Math.pow(boltR, 2) + Math.pow(boltL, 2)) / 12;
+            inertiaObj.Izz = Math.pow(boltR, 2) / 2;
+            break;
+            
           default:
-            // Default approximation
+            // Default: rectangular solid approximation
             const defW = params.width || 50;
             const defH = params.height || 50;
-            const defD = params.depth || 10;
+            const defD = params.depth || params.thickness || 10;
             inertiaObj.Ixx = (Math.pow(defH, 2) + Math.pow(defD, 2)) / 12;
             inertiaObj.Iyy = (Math.pow(defW, 2) + Math.pow(defD, 2)) / 12;
             inertiaObj.Izz = (Math.pow(defW, 2) + Math.pow(defH, 2)) / 12;

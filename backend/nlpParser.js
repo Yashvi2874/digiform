@@ -31,21 +31,38 @@ export function parseComponentDescription(description) {
 
 function detectComponentType(text) {
   // More comprehensive component type detection
+  // IMPORTANT: Order matters! Check specific types before generic ones
+  
+  // Specific mechanical components
   if (text.includes('gear')) return 'gear';
   if (text.includes('shaft') || text.includes('axle')) return 'shaft';
   if (text.includes('bearing')) return 'bearing';
-  if (text.includes('bracket') || text.includes('mount') || text.includes('support')) return 'bracket';
-  if (text.includes('plate') || text.includes('sheet')) return 'plate';
   if (text.includes('bolt') || text.includes('screw') || text.includes('fastener')) return 'bolt';
-  if (text.includes('cube') || text.includes('cubic')) return 'cube';
-  if (text.includes('prism') || text.includes('triangular') || text.includes('rectangular')) return 'prism';
-  if (text.includes('cylinder') || text.includes('cylindrical')) return 'cylinder';
+  
+  // Geometric shapes - check BEFORE bracket/plate
   if (text.includes('sphere') || text.includes('spherical') || text.includes('ball')) return 'sphere';
   if (text.includes('cone') || text.includes('conical')) return 'cone';
   if (text.includes('pyramid')) return 'pyramid';
+  if (text.includes('cylinder') || text.includes('cylindrical')) return 'cylinder';
   
-  // Default to bracket for generic requests
-  return 'bracket';
+  // Triangular prism (must check BEFORE "rectangular")
+  if (text.includes('triangular') && text.includes('prism')) return 'prism';
+  if (text.includes('prism') && !text.includes('rectangular')) return 'prism';
+  
+  // Cuboid/Box/Block - check BEFORE bracket/plate
+  // These should be solid cubes, not brackets with holes
+  if (text.includes('cuboid')) return 'cube';
+  if (text.includes('box')) return 'cube';
+  if (text.includes('block')) return 'cube';
+  if (text.includes('cube') || text.includes('cubic')) return 'cube';
+  if (text.includes('rectangular') && (text.includes('prism') || text.includes('solid') || text.includes('block'))) return 'cube';
+  
+  // Mounting bracket (has holes) vs solid plate (no holes)
+  if (text.includes('bracket') || text.includes('mount') || text.includes('support')) return 'bracket';
+  if (text.includes('plate') || text.includes('sheet')) return 'plate';
+  
+  // Default to cube for generic solid requests (not bracket!)
+  return 'cube';
 }
 
 function detectMaterial(text) {
@@ -161,8 +178,13 @@ function extractDimensions(text) {
     dimensions.teeth = parseInt(teethMatch[1]);
   }
   
-  // Extract RADIUS with unit support
-  const radiusMatch = /(?:radius|r)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Extract RADIUS with unit support (must come BEFORE diameter to avoid conflicts)
+  // Support both "radius 25mm" and "25mm radius" patterns
+  let radiusMatch = /\b(?:radius|r)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!radiusMatch) {
+    // Try reverse pattern: "25mm radius"
+    radiusMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+radius/i.exec(text);
+  }
   if (radiusMatch) {
     let value = parseFloat(radiusMatch[1]);
     const unit = radiusMatch[2]?.toLowerCase();
@@ -176,8 +198,13 @@ function extractDimensions(text) {
     dimensions.radius = value;
   }
   
-  // Extract DIAMETER with unit support
-  const diameterMatch = /(?:diameter|dia\.?|d|ø)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Extract DIAMETER with unit support (use word boundary to avoid matching "and")
+  // Support both "diameter 50mm" and "50mm diameter" patterns
+  let diameterMatch = /\b(?:diameter|dia\.?|ø)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!diameterMatch) {
+    // Try reverse pattern: "50mm diameter"
+    diameterMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+(?:diameter|dia\.?|ø)/i.exec(text);
+  }
   if (diameterMatch) {
     let value = parseFloat(diameterMatch[1]);
     const unit = diameterMatch[2]?.toLowerCase();
@@ -192,7 +219,12 @@ function extractDimensions(text) {
   }
   
   // Extract LENGTH with unit support
-  const lengthMatch = /(?:length|long)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Support both "length 100mm" and "100mm length" patterns
+  let lengthMatch = /\b(?:length|long)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!lengthMatch) {
+    // Try reverse pattern: "100mm length"
+    lengthMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+(?:length|long)/i.exec(text);
+  }
   if (lengthMatch) {
     let value = parseFloat(lengthMatch[1]);
     const unit = lengthMatch[2]?.toLowerCase();
@@ -207,7 +239,12 @@ function extractDimensions(text) {
   }
   
   // Extract THICKNESS with unit support
-  const thicknessMatch = /(?:thickness|thick)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Support both "thickness 10mm" and "10mm thickness" patterns
+  let thicknessMatch = /\b(?:thickness|thick)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!thicknessMatch) {
+    // Try reverse pattern: "10mm thickness"
+    thicknessMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+(?:thickness|thick)/i.exec(text);
+  }
   if (thicknessMatch) {
     let value = parseFloat(thicknessMatch[1]);
     const unit = thicknessMatch[2]?.toLowerCase();
@@ -222,7 +259,12 @@ function extractDimensions(text) {
   }
   
   // Extract WIDTH with unit support
-  const widthMatch = /(?:width|wide)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Support both "width 50mm" and "50mm width" patterns
+  let widthMatch = /\b(?:width|wide)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!widthMatch) {
+    // Try reverse pattern: "50mm width"
+    widthMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+(?:width|wide)/i.exec(text);
+  }
   if (widthMatch) {
     let value = parseFloat(widthMatch[1]);
     const unit = widthMatch[2]?.toLowerCase();
@@ -237,7 +279,12 @@ function extractDimensions(text) {
   }
   
   // Extract HEIGHT with unit support
-  const heightMatch = /(?:height|tall)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  // Support both "height 100mm" and "100mm height" patterns
+  let heightMatch = /\b(?:height|tall)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (!heightMatch) {
+    // Try reverse pattern: "100mm height"
+    heightMatch = /(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?\s+(?:height|tall)/i.exec(text);
+  }
   if (heightMatch) {
     let value = parseFloat(heightMatch[1]);
     const unit = heightMatch[2]?.toLowerCase();
@@ -259,15 +306,15 @@ function buildParameters(type, dimensions, description) {
   
   switch (type) {
     case 'gear':
-      // Prioritize explicitly named dimensions
+      // CRITICAL: Prioritize explicitly named dimensions
       if (dimensions.radius) {
-        // Radius explicitly specified
+        // User explicitly said "radius" - use it directly
         params.radius = dimensions.radius;
       } else if (dimensions.diameter) {
-        // Diameter specified, convert to radius
+        // User said "diameter" - convert to radius
         params.radius = dimensions.diameter / 2;
       } else if (dimensions.allValues && dimensions.allValues.length > 0) {
-        // Use first value as diameter, convert to radius
+        // Fallback: assume first value is diameter
         params.radius = dimensions.allValues[0] / 2;
       } else {
         // Default
@@ -287,33 +334,47 @@ function buildParameters(type, dimensions, description) {
       break;
       
     case 'shaft':
+      // CRITICAL: Prioritize explicitly named dimensions
       if (dimensions.radius) {
-        // Radius explicitly specified
+        // User explicitly said "radius" - use it directly
         params.radius = dimensions.radius;
       } else if (dimensions.diameter) {
-        // Diameter specified
+        // User said "diameter" - convert to radius
         params.radius = dimensions.diameter / 2;
       } else if (dimensions.allValues && dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.radius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.radius = 12.5;
       }
       
+      // CRITICAL: Prioritize explicitly named dimensions
       if (dimensions.length) {
+        // User explicitly said "length" - use it directly
         params.length = dimensions.length;
       } else if (dimensions.allValues && dimensions.allValues.length > 1) {
+        // Fallback: use second value as length
         params.length = dimensions.allValues[1];
       } else {
+        // Default
         params.length = 100;
       }
       break;
       
     case 'bearing':
-      if (dimensions.diameter) {
+      // CRITICAL: Prioritize explicitly named dimensions
+      if (dimensions.radius) {
+        // User explicitly said "radius" - use it directly
+        params.outerRadius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // User said "diameter" - convert to radius
         params.outerRadius = dimensions.diameter / 2;
       } else if (dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.outerRadius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.outerRadius = 30;
       }
       
@@ -359,19 +420,30 @@ function buildParameters(type, dimensions, description) {
       break;
       
     case 'bolt':
-      if (dimensions.diameter) {
+      // CRITICAL: Prioritize explicitly named dimensions
+      if (dimensions.radius) {
+        // User explicitly said "radius" - use it directly
+        params.radius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // User said "diameter" - convert to radius
         params.radius = dimensions.diameter / 2;
       } else if (dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.radius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.radius = 4;
       }
       
+      // CRITICAL: Prioritize explicitly named dimensions
       if (dimensions.length) {
+        // User explicitly said "length" - use it directly
         params.length = dimensions.length;
       } else if (dimensions.allValues.length > 1) {
+        // Fallback: use second value as length
         params.length = dimensions.allValues[1];
       } else {
+        // Default
         params.length = 30;
       }
       
@@ -441,21 +513,33 @@ function buildParameters(type, dimensions, description) {
       break;
       
     case 'cylinder':
-      if (dimensions.diameter) {
+      // CRITICAL: Prioritize explicitly named dimensions over allValues
+      if (dimensions.radius) {
+        // User explicitly said "radius" - use it directly
+        params.radius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // User said "diameter" - convert to radius
         params.radius = dimensions.diameter / 2;
       } else if (dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.radius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.radius = 25;
       }
       
-      if (dimensions.length) {
-        params.height = dimensions.length;
-      } else if (dimensions.height) {
+      // CRITICAL: Prioritize explicitly named dimensions over allValues
+      if (dimensions.height) {
+        // User explicitly said "height" - use it directly
         params.height = dimensions.height;
+      } else if (dimensions.length) {
+        // User said "length" - use it as height
+        params.height = dimensions.length;
       } else if (dimensions.allValues.length > 1) {
+        // Fallback: use second value as height
         params.height = dimensions.allValues[1];
       } else {
+        // Default
         params.height = 50;
       }
       
@@ -482,33 +566,52 @@ function buildParameters(type, dimensions, description) {
       break;
       
     case 'sphere':
-      if (dimensions.diameter) {
+      // CRITICAL: Prioritize explicitly named dimensions
+      if (dimensions.radius) {
+        // User explicitly said "radius" - use it directly
+        params.radius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // User said "diameter" - convert to radius
         params.radius = dimensions.diameter / 2;
       } else if (dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.radius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.radius = 25;
       }
       break;
       
     case 'cone':
-      if (dimensions.diameter) {
+      // CRITICAL: Prioritize explicitly named dimensions
+      if (dimensions.radius) {
+        // User explicitly said "radius" - use it directly
+        params.baseRadius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // User said "diameter" - convert to radius
         params.baseRadius = dimensions.diameter / 2;
       } else if (dimensions.allValues.length > 0) {
+        // Fallback: assume first value is diameter
         params.baseRadius = dimensions.allValues[0] / 2;
       } else {
+        // Default
         params.baseRadius = 25;
       }
       
       params.topRadius = dimensions.topDiameter ? dimensions.topDiameter / 2 : 0;
       
-      if (dimensions.length) {
-        params.height = dimensions.length;
-      } else if (dimensions.height) {
+      // CRITICAL: Prioritize explicitly named dimensions
+      if (dimensions.height) {
+        // User explicitly said "height" - use it directly
         params.height = dimensions.height;
+      } else if (dimensions.length) {
+        // User said "length" - use it as height
+        params.height = dimensions.length;
       } else if (dimensions.allValues.length > 1) {
+        // Fallback: use second value as height
         params.height = dimensions.allValues[1];
       } else {
+        // Default
         params.height = 50;
       }
       break;

@@ -105,11 +105,18 @@ function createGeometry(design) {
         parameters.innerRadius || 15
       );
     case 'bracket':
-    case 'plate':
+      // Brackets have mounting holes
       return createBracketGeometry(
         parameters.width || 50,
         parameters.height || 50,
         parameters.depth || 10
+      );
+    case 'plate':
+      // Plates are solid (no holes) - use BoxGeometry
+      return new THREE.BoxGeometry(
+        parameters.width || 50,
+        parameters.height || 50,
+        parameters.depth || parameters.thickness || 10
       );
     case 'bolt':
       return new THREE.CylinderGeometry(

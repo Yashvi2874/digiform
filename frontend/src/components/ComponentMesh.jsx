@@ -186,11 +186,18 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
           parameters.innerRadius || 15
         );
       case 'bracket':
-      case 'plate':
+        // Brackets have mounting holes
         return createBracketGeometry(
           parameters.width || 50,
           parameters.height || 50,
           parameters.depth || 10
+        );
+      case 'plate':
+        // Plates are solid (no holes) - use BoxGeometry
+        return new THREE.BoxGeometry(
+          parameters.width || 50,
+          parameters.height || 50,
+          parameters.depth || parameters.thickness || 10
         );
       case 'bolt':
         // Create bolt geometry (cylinder with hex head)
@@ -201,10 +208,11 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
           16
         );
       case 'cube':
+        // Cube/Cuboid - solid box with no holes
         return new THREE.BoxGeometry(
-          parameters.size || 50,
-          parameters.size || 50,
-          parameters.size || 50
+          parameters.width || parameters.size || 50,
+          parameters.height || parameters.size || 50,
+          parameters.depth || parameters.size || 50
         );
       case 'prism':
         // Create triangular prism using extrusion
