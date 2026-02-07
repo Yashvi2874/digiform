@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle, Loader2, Gauge, Shield, Weight, Zap, X } from 'lucide-react';
 import { useDesignStore } from '../store/designStore';
 import { runSimulation } from '../services/api';
+import ExportPanel from './ExportPanel';
 
 export default function AnalysisPanel() {
   const { currentDesign, updateDesignAnalysis } = useDesignStore();
@@ -57,6 +58,8 @@ export default function AnalysisPanel() {
         </h2>
       </div>
 
+      {/* Export Panel */}
+      <ExportPanel design={currentDesign} />
       <button
         onClick={handleRunSimulation}
         disabled={loading}

@@ -1,4 +1,3 @@
-// Rule-based NLP parser for component descriptions
 export function parseComponentDescription(description) {
   const lower = description.toLowerCase();
   

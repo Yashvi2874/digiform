@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 
 export default function Viewer3D() {
   const { currentDesign } = useDesignStore();
+  const hasAnalysis = currentDesign?.analysis;
 
   return (
     <div className="w-full h-full bg-gradient-to-br from-dark via-gray-900 to-dark-light relative">
@@ -24,13 +25,14 @@ export default function Viewer3D() {
             <p>🖱️ Left click + drag to rotate</p>
             <p>🖱️ Right click + drag to pan</p>
             <p>🖱️ Scroll to zoom</p>
+            {hasAnalysis && <p className="text-primary mt-1">🔥 Heatmap: Active</p>}
           </div>
 
           {/* Stress indicator */}
-          {currentDesign.analysis && (
+          {hasAnalysis && (
             <div className="absolute top-6 right-6 z-10 bg-dark/80 backdrop-blur-md border border-primary/30 rounded-lg p-4 shadow-xl">
-              <h3 className="text-sm font-semibold mb-2">Live Simulation</h3>
-              <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold mb-2">Stress Analysis</h3>
+              <div className="flex items-center gap-2 mb-3">
                 <div className={`w-3 h-3 rounded-full animate-pulse ${
                   currentDesign.analysis.safetyFactor < 2 ? 'bg-red-500' : 'bg-green-500'
                 }`}></div>
@@ -38,8 +40,32 @@ export default function Viewer3D() {
                   {currentDesign.analysis.safetyFactor < 2 ? 'High Stress' : 'Optimal'}
                 </span>
               </div>
-              <div className="mt-2 text-xs text-gray-400">
-                Safety Factor: <span className="text-white font-bold">{currentDesign.analysis.safetyFactor}</span>
+              
+              {/* Heatmap legend */}
+              <div className="space-y-1">
+                <p className="text-xs text-gray-400 mb-2">Stress Levels:</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <span className="text-xs text-gray-300">Low</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                  <span className="text-xs text-gray-300">Moderate</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                  <span className="text-xs text-gray-300">High</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <span className="text-xs text-gray-300">Critical</span>
+                </div>
+              </div>
+              
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <p className="text-xs text-gray-400">
+                  Max: <span className="text-white font-bold">{currentDesign.analysis.maxStress} MPa</span>
+                </p>
               </div>
             </div>
           )}
@@ -60,7 +86,7 @@ export default function Viewer3D() {
               <pointLight position={[-10, -10, -5]} intensity={0.5} color="#7c3aed" />
               <pointLight position={[10, -10, 5]} intensity={0.5} color="#2563eb" />
               
-              <ComponentMesh design={currentDesign} />
+              <ComponentMesh design={currentDesign} autoRotate={!hasAnalysis} />
               
               {/* Ground and shadows */}
               <ContactShadows 
@@ -89,6 +115,8 @@ export default function Viewer3D() {
                 dampingFactor={0.05}
                 minDistance={50}
                 maxDistance={500}
+                autoRotate={!hasAnalysis}
+                autoRotateSpeed={2}
               />
             </Suspense>
           </Canvas>

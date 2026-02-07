@@ -1,14 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import InputPanel from './components/InputPanel';
+import ChatPanel from './components/ChatPanel';
 import Viewer3D from './components/Viewer3D';
 import AnalysisPanel from './components/AnalysisPanel';
 import VersionControl from './components/VersionControl';
 import { useDesignStore } from './store/designStore';
+import { useChatStore } from './store/chatStore';
+import { createSession } from './services/api';
 
 function App() {
   const [activeTab, setActiveTab] = useState('design');
   const { currentDesign } = useDesignStore();
+  const { sessionId, initSession } = useChatStore();
+
+  useEffect(() => {
+    // Initialize chat session if not exists
+    if (!sessionId) {
+      createSession().then(({ sessionId: newSessionId }) => {
+        initSession(newSessionId);
+      });
+    }
+  }, [sessionId, initSession]);
 
   return (
     <div className="min-h-screen bg-dark text-white relative overflow-hidden">
@@ -20,9 +32,9 @@ function App() {
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <div className="flex h-[calc(100vh-80px)] relative">
-        {/* Left Panel - Input & Controls */}
-        <div className="w-96 bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-r border-primary/20 overflow-y-auto shadow-2xl">
-          <InputPanel />
+        {/* Left Panel - Chat */}
+        <div className="w-96 bg-gradient-to-b from-dark-light/95 to-dark/95 backdrop-blur-sm border-r border-primary/20 overflow-hidden shadow-2xl">
+          <ChatPanel />
         </div>
 
         {/* Center - 3D Viewer */}

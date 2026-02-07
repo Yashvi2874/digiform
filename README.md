@@ -1,166 +1,279 @@
-# Industrial Design AI Platform (DigiForm)
+# DigiForm - Where Ideas Take Shape
 
-An AI-driven platform for designing and simulating industrial components using natural language. Describe what you need, and the system generates 3D models, runs engineering simulations, and maintains version control.
+An AI-driven platform for designing and simulating industrial components using natural language. Built with React, Node.js, and MongoDB.
 
-## Features
+![DigiForm](https://img.shields.io/badge/DigiForm-Production%20Ready-success)
+![React](https://img.shields.io/badge/React-18.2.0-blue)
+![Node.js](https://img.shields.io/badge/Node.js-18+-green)
+![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-brightgreen)
 
-- **Natural Language Input**: Describe components in plain English (no OpenAI API required!)
-- **Rule-Based NLP Parser**: Intelligent extraction of dimensions, materials, and specifications
-- **Real-time 3D Visualization**: Interactive Three.js viewer with orbit controls
-- **Engineering Simulation**: Stress analysis, safety factors, and material properties
-- **Version Control**: Track all design iterations with timestamps
-- **Iterative Refinement**: Modify designs through follow-up prompts
-- **CAD Export**: Optional STL/STEP file generation using Python + OpenCascade
-- **Digital Twin**: Living model with performance metrics
+## ✨ Features
 
-## Tech Stack
+- 🤖 **Conversational AI Assistant** - Natural language design interface
+- 🎨 **Real-time 3D Visualization** - Interactive Three.js viewer with stress heatmaps
+- 🔬 **Engineering Simulation** - Stress analysis, safety factors, load-based calculations
+- 📥 **Multi-Format Export** - STL, GLB, OBJ, STEP file generation
+- 💾 **Cloud Database** - MongoDB Atlas for persistent storage
+- 🔄 **Version Control** - Track all design iterations
+- ✅ **Approval Workflow** - Review and approve designs before proceeding
+- 📊 **Performance Analysis** - Real-time structural integrity assessment
 
-- **Frontend**: React 18 + Vite + Tailwind CSS
-- **3D Graphics**: Three.js + React Three Fiber
-- **Backend**: Node.js + Express
-- **NLP**: Custom rule-based parser (no API costs!)
-- **CAD Engine**: Python + OpenCascade (optional)
-- **State Management**: Zustand
+## 🏗️ Architecture
 
-## Quick Start
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│                 │      │                 │      │                 │
+│  Vercel         │◄────►│  Render         │◄────►│  MongoDB Atlas  │
+│  (Frontend)     │      │  (Backend)      │      │  (Database)     │
+│                 │      │                 │      │                 │
+│  React + Vite   │      │  Node.js        │      │  Cloud DB       │
+│  Three.js       │      │  Express        │      │  Mongoose       │
+│  Tailwind CSS   │      │  AI Services    │      │  Collections    │
+│                 │      │                 │      │                 │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+```
+
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Node.js 18+
-- Python 3.8+ (optional, for CAD export)
+- MongoDB Atlas account (free tier)
+- Vercel account (optional, for deployment)
+- Render account (optional, for deployment)
 
-### Installation
+### Local Development
 
-**Windows:**
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/digiform.git
+   cd digiform
+   ```
+
+2. **Setup Backend**
+   ```bash
+   cd backend
+   npm install
+   cp .env.example .env
+   # Edit .env with your MongoDB URI
+   npm run dev
+   ```
+
+3. **Setup Frontend** (in new terminal)
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env
+   # Edit .env with backend URL
+   npm run dev
+   ```
+
+4. **Open Browser**
+   - Frontend: http://localhost:3000
+   - Backend: http://localhost:5000
+
+## 📦 Project Structure
+
+```
+digiform/
+├── frontend/          # React + Vite application
+│   ├── components/    # UI components
+│   ├── services/      # API integration
+│   ├── store/         # State management
+│   └── ...
+├── backend/           # Node.js + Express API
+│   ├── models/        # MongoDB schemas
+│   ├── aiService.js   # Simulation engine
+│   ├── chatService.js # Conversational AI
+│   └── ...
+└── docs/              # Documentation
+```
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for detailed structure.
+
+## 🌐 Deployment
+
+### Option 1: Vercel + Render + MongoDB Atlas (Recommended)
+
+**Perfect for production with:**
+- ✅ Automatic deployments
+- ✅ Global CDN
+- ✅ Serverless functions
+- ✅ Free tier available
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step guide.
+
+### Quick Deploy Commands
+
+**Frontend (Vercel)**
 ```bash
-setup.bat
+cd frontend
+vercel --prod
 ```
 
-**Manual Setup:**
-```bash
-npm install
-mkdir output
+**Backend (Render)**
+- Connect GitHub repository
+- Set root directory to `backend`
+- Add environment variables
+- Deploy
+
+## 🎯 Usage Examples
+
+### Design a Component
+```
+You: "Design a gear with 20 teeth, 50mm diameter, steel"
+
+AI: "I've analyzed your requirements and created a design proposal:
+     Component Type: gear
+     Material: Steel
+     ..."
+     
+[Approve] [Modify]
 ```
 
-### Running the Application
+### Modify Design
+```
+You: "Make it aluminum instead"
 
-```bash
-npm run dev
+AI: "I've updated the design with the following changes:
+     • Changed material to Aluminum
+     ..."
 ```
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:5000
+### Run Simulation
+1. Approve your design
+2. Click "Run Simulation"
+3. Enter load conditions (force & area)
+4. View stress heatmap and analysis
 
-## Usage
+### Export CAD
+- Click format button (STL, GLB, OBJ, STEP)
+- File downloads automatically
+- Use in 3D printing, CAD software, or web apps
 
-1. **Describe Your Component**: Enter a natural language description like:
-   - "Design a gear with 20 teeth, 50mm diameter, for high-torque applications"
-   - "Create a steel shaft 200mm long, 25mm diameter"
-   - "Design a mounting bracket 100x100mm, 10mm thick, aluminum"
-   - "Make a bearing with 60mm outer diameter, titanium"
+## 🔧 Configuration
 
-2. **View 3D Model**: The system generates a 3D visualization automatically
+### Environment Variables
 
-3. **Run Simulation**: Click "Run Simulation" to analyze:
-   - Structural integrity
-   - Stress levels
-   - Safety factors
-   - Material properties
-   - Potential warnings
-
-4. **Iterate**: Refine your design with follow-up descriptions
-
-5. **Version Control**: Access previous versions from the history panel
-
-## How It Works
-
-### NLP Parser
-The system uses a sophisticated rule-based parser that:
-- Detects component types (gear, shaft, bearing, bracket, bolt, plate)
-- Extracts dimensions from various formats (50mm, 2.5cm, 2", 100x50x10mm)
-- Identifies materials (steel, aluminum, titanium, brass, copper)
-- Determines complexity levels
-- Recognizes applications (high-torque, precision, automotive, aerospace)
-
-### Simulation Engine
-Performs real engineering calculations:
-- Stress analysis based on material properties
-- Safety factor calculations
-- Deformation estimates
-- Mass and volume calculations
-- Warning generation for design issues
-
-### CAD Generation (Optional)
-If Python is installed:
-- Generates STL files for 3D printing
-- Creates STEP files for CAD software
-- Calculates precise physical properties
-
-## Example Descriptions
-
-```
-"Design a gear with 20 teeth, 50mm diameter, for high-torque applications"
-→ Generates: Gear with extracted parameters, steel material, medium complexity
-
-"Create an aluminum shaft 200mm long, 25mm diameter"
-→ Generates: Cylindrical shaft with specified dimensions, aluminum material
-
-"Design a mounting bracket 100x100mm, 10mm thick"
-→ Generates: Rectangular bracket with extracted dimensions
-
-"Make a precision bearing with 60mm outer diameter, titanium"
-→ Generates: Torus-shaped bearing, titanium material, high complexity
+**Frontend (.env)**
+```env
+VITE_API_URL=https://your-backend-url.com
 ```
 
-## Architecture
-
-```
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   ├── services/          # API integration
-│   └── store/             # State management
-├── server/                # Node.js backend
-│   ├── index.js          # Express server
-│   ├── aiService.js      # Simulation engine
-│   └── nlpParser.js      # NLP parser
-├── python_backend/        # Optional CAD engine
-│   ├── simple_cad.py     # STL generator
-│   └── cad_generator.py  # OpenCascade integration
-└── output/               # Generated CAD files
+**Backend (.env)**
+```env
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/digiform
+PORT=5000
+NODE_ENV=production
+FRONTEND_URL=https://your-frontend-url.com
 ```
 
-## No API Costs!
+## 📚 Documentation
 
-This platform uses a custom rule-based NLP parser instead of expensive AI APIs. It intelligently extracts:
-- Component types
-- Dimensions (mm, cm, inches)
-- Materials
-- Complexity levels
-- Applications
+- [Deployment Guide](DEPLOYMENT.md) - Step-by-step deployment instructions
+- [Project Structure](PROJECT_STRUCTURE.md) - Detailed code organization
+- [API Documentation](docs/API.md) - API endpoints and usage
+- [Chat System](CHAT_SYSTEM.md) - Conversational AI details
+- [Simulation Features](SIMULATION_FEATURES.md) - Engineering analysis
+- [Export Features](EXPORT_FEATURES.md) - CAD export capabilities
 
-All processing happens locally - no API keys or quotas needed!
+## 🛠️ Tech Stack
 
-## Future Enhancements
+### Frontend
+- **React 18** - UI framework
+- **Vite** - Build tool
+- **Three.js** - 3D graphics
+- **Tailwind CSS** - Styling
+- **Zustand** - State management
+- **Axios** - HTTP client
 
-- ✅ Rule-based NLP (no API costs)
-- ✅ Basic CAD generation
-- 🔄 Advanced FEA integration
-- 🔄 More component types (springs, fasteners, housings)
-- 🔄 Assembly modeling
-- 🔄 Thermal analysis
-- 🔄 Fatigue life prediction
-- 🔄 Manufacturing cost estimation
-- 🔄 Collaboration features
-- 🔄 Cloud rendering
+### Backend
+- **Node.js** - Runtime
+- **Express** - Web framework
+- **MongoDB** - Database
+- **Mongoose** - ODM
+- **Three.js** - CAD export
 
-## Troubleshooting
+### Infrastructure
+- **Vercel** - Frontend hosting
+- **Render** - Backend hosting
+- **MongoDB Atlas** - Database hosting
 
-**"Python script failed"**: Python CAD export is optional. The app works without it.
+## 🎨 Features in Detail
 
-**Port already in use**: Change PORT in .env file
+### Conversational AI
+- Natural language understanding
+- Context-aware responses
+- Design proposal generation
+- Modification handling
+- Question answering
 
-**Module not found**: Run `npm install` again
+### 3D Visualization
+- Real-time rendering
+- Orbit controls
+- Stress heatmaps
+- Material-accurate colors
+- Auto-rotation control
 
-## License
+### Engineering Simulation
+- Load-based stress analysis
+- Safety factor calculation
+- Deformation estimation
+- Material property database
+- Warning generation
 
-MIT
+### CAD Export
+- STL for 3D printing
+- GLB for web/AR/VR
+- OBJ for universal use
+- STEP for CAD software
+
+### Database Persistence
+- Session management
+- Message history
+- Design versioning
+- Analysis records
+- Export tracking
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Three.js community for 3D graphics
+- React Three Fiber for React integration
+- MongoDB for database solutions
+- Vercel and Render for hosting
+
+## 📞 Support
+
+- 📧 Email: support@digiform.app
+- 💬 Discord: [Join our community](https://discord.gg/digiform)
+- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/digiform/issues)
+
+## 🗺️ Roadmap
+
+- [ ] Multi-user collaboration
+- [ ] Advanced FEA integration
+- [ ] Assembly modeling
+- [ ] Manufacturing cost estimation
+- [ ] Mobile app
+- [ ] API for third-party integration
+- [ ] Marketplace for designs
+- [ ] AI-powered optimization suggestions
+
+---
+
+**Made with ❤️ by the DigiForm Team**
+
+**DigiForm - Where Ideas Take Shape** 🚀

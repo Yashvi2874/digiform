@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -92,9 +92,9 @@ function createBracketGeometry(width, height, depth) {
   });
 }
 
-export default function ComponentMesh({ design }) {
+export default function ComponentMesh({ design, autoRotate = true }) {
   const meshRef = useRef();
-  const stressRef = useRef();
+  const heatmapRef = useRef();
 
   const geometry = useMemo(() => {
     const { type, parameters } = design;
@@ -132,15 +132,45 @@ export default function ComponentMesh({ design }) {
     }
   }, [design]);
 
+  // Create vertex colors for heatmap
+  useEffect(() => {
+    if (design.analysis?.stressDistribution && meshRef.current) {
+      const geo = meshRef.current.geometry;
+      const colors = [];
+      const positionAttribute = geo.attributes.position;
+      const vertexCount = positionAttribute.count;
+      
+      for (let i = 0; i < vertexCount; i++) {
+        const y = positionAttribute.getY(i);
+        const z = positionAttribute.getZ(i);
+        
+        // Calculate distance from center (normalized)
+        const distance = Math.sqrt(y * y + z * z);
+        const maxDistance = 100; // Approximate max distance
+        const normalizedDistance = Math.min(distance / maxDistance, 1);
+        
+        // Get stress color based on position
+        const stressRatio = design.analysis.maxStress / design.analysis.yieldStrength;
+        const localStressRatio = stressRatio * (1 - normalizedDistance * 0.7);
+        
+        const color = new THREE.Color(getStressColor(localStressRatio));
+        colors.push(color.r, color.g, color.b);
+      }
+      
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.attributes.color.needsUpdate = true;
+    }
+  }, [design.analysis]);
+
   useFrame((state) => {
-    if (meshRef.current) {
+    if (meshRef.current && autoRotate) {
       meshRef.current.rotation.y = state.clock.getElapsedTime() * 0.3;
     }
     
-    // Animate stress visualization if analysis exists
-    if (stressRef.current && design.analysis) {
+    // Animate heatmap pulsing if analysis exists
+    if (heatmapRef.current && design.analysis) {
       const pulse = Math.sin(state.clock.getElapsedTime() * 2) * 0.5 + 0.5;
-      stressRef.current.opacity = 0.1 + pulse * 0.2;
+      heatmapRef.current.opacity = 0.6 + pulse * 0.2;
     }
   });
 
@@ -156,25 +186,42 @@ export default function ComponentMesh({ design }) {
     return colors[material] || '#8b9dc3';
   };
 
+  const getStressColor = (ratio) => {
+    if (ratio < 0.3) return '#00ff00'; // Green
+    if (ratio < 0.5) return '#7fff00'; // Yellow-green
+    if (ratio < 0.7) return '#ffff00'; // Yellow
+    if (ratio < 0.85) return '#ff7f00'; // Orange
+    return '#ff0000'; // Red
+  };
+
   return (
     <group>
       <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial 
-          color={getMaterialColor()}
-          metalness={0.9} 
-          roughness={0.1}
-          envMapIntensity={1}
-        />
+        {design.analysis ? (
+          <meshStandardMaterial 
+            vertexColors={true}
+            metalness={0.7} 
+            roughness={0.3}
+            envMapIntensity={0.8}
+          />
+        ) : (
+          <meshStandardMaterial 
+            color={getMaterialColor()}
+            metalness={0.9} 
+            roughness={0.1}
+            envMapIntensity={1}
+          />
+        )}
       </mesh>
       
-      {/* Stress visualization overlay */}
+      {/* Wireframe overlay for better visualization */}
       {design.analysis && (
-        <mesh geometry={geometry} scale={1.01}>
+        <mesh geometry={geometry} scale={1.002}>
           <meshBasicMaterial 
-            ref={stressRef}
-            color={design.analysis.safetyFactor < 2 ? '#ff0000' : '#00ff00'}
+            ref={heatmapRef}
+            color="#ffffff"
             transparent
-            opacity={0.2}
+            opacity={0.7}
             wireframe
           />
         </mesh>
