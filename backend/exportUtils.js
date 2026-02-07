@@ -111,6 +111,84 @@ function createGeometry(design) {
         parameters.height || 50,
         parameters.depth || 10
       );
+    case 'bolt':
+      return new THREE.CylinderGeometry(
+        parameters.radius || 4,
+        parameters.radius || 4,
+        parameters.length || 30,
+        16
+      );
+    case 'cube':
+      return new THREE.BoxGeometry(
+        parameters.width || parameters.size || 50,
+        parameters.height || parameters.size || 50,
+        parameters.depth || parameters.size || 50
+      );
+    case 'cylinder':
+      if (parameters.isHollow) {
+        // Create hollow cylinder using LatheGeometry
+        const points = [];
+        const innerR = parameters.innerRadius || parameters.radius * 0.8;
+        const outerR = parameters.radius || 25;
+        const height = parameters.height || 50;
+        const halfHeight = height / 2;
+        
+        points.push(new THREE.Vector2(innerR, -halfHeight));
+        points.push(new THREE.Vector2(outerR, -halfHeight));
+        points.push(new THREE.Vector2(outerR, halfHeight));
+        points.push(new THREE.Vector2(innerR, halfHeight));
+        points.push(new THREE.Vector2(innerR, -halfHeight));
+        
+        const geometry = new THREE.LatheGeometry(points, 32);
+        geometry.rotateX(Math.PI / 2);
+        return geometry;
+      } else {
+        const geometry = new THREE.CylinderGeometry(
+          parameters.radius || 25,
+          parameters.radius || 25,
+          parameters.height || 50,
+          32
+        );
+        geometry.rotateX(Math.PI / 2);
+        return geometry;
+      }
+    case 'sphere':
+      return new THREE.SphereGeometry(
+        parameters.radius || 25,
+        32,
+        32
+      );
+    case 'cone':
+      return new THREE.ConeGeometry(
+        parameters.baseRadius || 25,
+        parameters.height || 50,
+        32
+      );
+    case 'prism':
+      const prismShape = new THREE.Shape();
+      const halfWidth = (parameters.baseWidth || 30) / 2;
+      const halfHeight = (parameters.baseHeight || 30) / 2;
+      prismShape.moveTo(0, halfHeight);
+      prismShape.lineTo(-halfWidth, -halfHeight);
+      prismShape.lineTo(halfWidth, -halfHeight);
+      prismShape.lineTo(0, halfHeight);
+      return new THREE.ExtrudeGeometry(prismShape, {
+        depth: parameters.length || 50,
+        bevelEnabled: false
+      });
+    case 'pyramid':
+      const pyramidShape = new THREE.Shape();
+      const halfBaseWidth = (parameters.baseWidth || 30) / 2;
+      const halfBaseDepth = (parameters.baseDepth || 30) / 2;
+      pyramidShape.moveTo(-halfBaseWidth, -halfBaseDepth);
+      pyramidShape.lineTo(halfBaseWidth, -halfBaseDepth);
+      pyramidShape.lineTo(halfBaseWidth, halfBaseDepth);
+      pyramidShape.lineTo(-halfBaseWidth, halfBaseDepth);
+      pyramidShape.lineTo(-halfBaseWidth, -halfBaseDepth);
+      return new THREE.ExtrudeGeometry(pyramidShape, {
+        depth: parameters.height || 40,
+        bevelEnabled: false
+      });
     default:
       return new THREE.BoxGeometry(
         parameters.width || 50,
@@ -121,36 +199,75 @@ function createGeometry(design) {
 }
 
 export async function exportToSTL(design) {
-  const geometry = createGeometry(design);
-  const mesh = new THREE.Mesh(geometry);
-  
-  const exporter = new STLExporter();
-  const stlString = exporter.parse(mesh, { binary: true });
-  
-  return Buffer.from(stlString);
+  try {
+    const geometry = createGeometry(design);
+    const mesh = new THREE.Mesh(geometry);
+    
+    const exporter = new STLExporter();
+    const stlData = exporter.parse(mesh, { binary: true });
+    
+    // STLExporter returns ArrayBuffer or Uint8Array
+    if (stlData instanceof ArrayBuffer) {
+      return Buffer.from(stlData);
+    } else if (stlData instanceof Uint8Array) {
+      return Buffer.from(stlData);
+    } else if (typeof stlData === 'string') {
+      return Buffer.from(stlData);
+    } else {
+      throw new Error('Unexpected STL export data type: ' + typeof stlData);
+    }
+  } catch (error) {
+    console.error('STL export error:', error);
+    throw error;
+  }
 }
 
 export async function exportToGLB(design) {
   return new Promise((resolve, reject) => {
-    const geometry = createGeometry(design);
-    const material = new THREE.MeshStandardMaterial({ 
-      color: 0x8b9dc3,
-      metalness: 0.9,
-      roughness: 0.1
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    
-    const exporter = new GLTFExporter();
-    exporter.parse(
-      mesh,
-      (result) => {
-        resolve(Buffer.from(result));
-      },
-      (error) => {
-        reject(error);
-      },
-      { binary: true }
-    );
+    try {
+      const geometry = createGeometry(design);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x8b9dc3,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      // Create a scene to hold the mesh
+      const scene = new THREE.Scene();
+      scene.add(mesh);
+      
+      const exporter = new GLTFExporter();
+      
+      // Use onlyVisible: false to avoid FileReader issues
+      exporter.parse(
+        scene,
+        (result) => {
+          try {
+            if (result instanceof ArrayBuffer) {
+              resolve(Buffer.from(result));
+            } else {
+              // For JSON format, convert to string then buffer
+              const jsonString = JSON.stringify(result);
+              resolve(Buffer.from(jsonString));
+            }
+          } catch (conversionError) {
+            reject(conversionError);
+          }
+        },
+        (error) => {
+          reject(error);
+        },
+        { 
+          binary: true,
+          onlyVisible: false,
+          embedImages: false,
+          truncateDrawRange: false
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 

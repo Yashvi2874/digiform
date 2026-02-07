@@ -101,6 +101,16 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+// Debug endpoint to check if user exists (REMOVE IN PRODUCTION)
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await db.User.find({}).select('email name createdAt').limit(10);
+    res.json({ count: users.length, users });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 app.post('/api/chat/session', authMiddleware, async (req, res) => {
   try {
@@ -269,6 +279,8 @@ app.post('/api/export', async (req, res) => {
       return res.status(400).json({ error: 'Design and format are required' });
     }
     
+    console.log(`Exporting ${format.toUpperCase()} for design type: ${design.type}`);
+    
     let buffer;
     let contentType;
     let filename = `${design.type || 'component'}_${Date.now()}`;
@@ -283,6 +295,7 @@ app.post('/api/export', async (req, res) => {
         buffer = await exportToGLB(design);
         contentType = 'model/gltf-binary';
         filename += '.glb';
+        console.log(`GLB buffer size: ${buffer.length} bytes`);
         break;
       case 'obj':
         buffer = await exportToOBJ(design);
@@ -298,18 +311,23 @@ app.post('/api/export', async (req, res) => {
         return res.status(400).json({ error: 'Unsupported format' });
     }
     
-    // Save CAD file record to database if design has an ID
-    if (design.id) {
+    if (!buffer || buffer.length === 0) {
+      throw new Error(`Export failed: buffer is empty for format ${format}`);
+    }
+    
+    // Save CAD file record to database if design has a valid MongoDB ObjectId
+    if (design.id && typeof design.id === 'string' && design.id.length === 24) {
       try {
         const filePath = join(outputDir, filename);
         fs.writeFileSync(filePath, buffer);
         await db.saveCADFile(design.id, format, filePath, buffer.length);
       } catch (dbError) {
-        console.error('Failed to save CAD file to DB:', dbError);
+        console.error('Failed to save CAD file to DB:', dbError.message);
         // Continue even if DB save fails
       }
     }
     
+    console.log(`Sending ${format.toUpperCase()} file: ${filename} (${buffer.length} bytes)`);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);

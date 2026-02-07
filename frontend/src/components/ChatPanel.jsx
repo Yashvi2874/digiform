@@ -53,6 +53,8 @@ export default function ChatPanel() {
         needsApproval: response.needsApproval,
         designId: response.designId
       });
+      
+      console.log('Message added with needsApproval:', response.needsApproval, 'designId:', response.designId);
     } catch (error) {
       console.error('Chat error:', error);
       addMessage({
