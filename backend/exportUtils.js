@@ -255,72 +255,142 @@ export async function exportToSTL(design) {
 }
 
 export async function exportToGLB(design) {
-  return new Promise((resolve, reject) => {
-    try {
-      const geometry = createGeometry(design);
-      
-      if (!geometry) {
-        reject(new Error('Failed to create geometry for design type: ' + design.type));
-        return;
-      }
-      
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x8b9dc3,
-        metalness: 0.9,
-        roughness: 0.1
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.name = design.type || 'component';
-      
-      // Create a scene to hold the mesh
-      const scene = new THREE.Scene();
-      scene.add(mesh);
-      
-      const exporter = new GLTFExporter();
-      
-      // Export as JSON first (doesn't use FileReader)
-      exporter.parse(
-        scene,
-        (gltfJson) => {
-          try {
-            if (!gltfJson) {
-              reject(new Error('GLB exporter returned null or undefined'));
-              return;
-            }
-            
-            // Convert JSON to string and then to buffer
-            // This creates a GLTF file (JSON format) instead of GLB (binary)
-            // But it's still compatible with most 3D viewers
-            const jsonString = JSON.stringify(gltfJson, null, 2);
-            const buffer = Buffer.from(jsonString, 'utf-8');
-            
-            if (buffer.length === 0) {
-              reject(new Error('GLB export produced empty buffer'));
-              return;
-            }
-            
-            resolve(buffer);
-          } catch (conversionError) {
-            reject(conversionError);
-          }
-        },
-        (error) => {
-          console.error('GLB parse error:', error);
-          reject(error);
-        },
-        { 
-          binary: false, // Use JSON format to avoid FileReader
-          onlyVisible: false,
-          embedImages: false,
-          truncateDrawRange: false
-        }
-      );
-    } catch (error) {
-      console.error('GLB export error:', error);
-      console.error('Design:', JSON.stringify(design, null, 2));
-      reject(error);
+  try {
+    const geometry = createGeometry(design);
+    
+    if (!geometry) {
+      throw new Error('Failed to create geometry for design type: ' + design.type);
     }
-  });
+    
+    // Extract geometry data manually
+    const positions = geometry.attributes.position.array;
+    const indices = geometry.index ? geometry.index.array : null;
+    const normals = geometry.attributes.normal ? geometry.attributes.normal.array : null;
+    
+    // Create a simple GLTF JSON structure manually
+    const gltf = {
+      asset: {
+        version: "2.0",
+        generator: "DigiForm CAD Engine"
+      },
+      scene: 0,
+      scenes: [
+        {
+          nodes: [0]
+        }
+      ],
+      nodes: [
+        {
+          mesh: 0,
+          name: design.type || "component"
+        }
+      ],
+      meshes: [
+        {
+          primitives: [
+            {
+              attributes: {
+                POSITION: 0,
+                NORMAL: normals ? 1 : undefined
+              },
+              indices: indices ? 2 : undefined,
+              material: 0
+            }
+          ]
+        }
+      ],
+      materials: [
+        {
+          pbrMetallicRoughness: {
+            baseColorFactor: [0.545, 0.616, 0.765, 1.0], // Steel color
+            metallicFactor: 0.9,
+            roughnessFactor: 0.1
+          },
+          name: design.material || "Steel"
+        }
+      ],
+      accessors: [
+        {
+          bufferView: 0,
+          componentType: 5126, // FLOAT
+          count: positions.length / 3,
+          type: "VEC3",
+          max: [
+            Math.max(...Array.from(positions).filter((_, i) => i % 3 === 0)),
+            Math.max(...Array.from(positions).filter((_, i) => i % 3 === 1)),
+            Math.max(...Array.from(positions).filter((_, i) => i % 3 === 2))
+          ],
+          min: [
+            Math.min(...Array.from(positions).filter((_, i) => i % 3 === 0)),
+            Math.min(...Array.from(positions).filter((_, i) => i % 3 === 1)),
+            Math.min(...Array.from(positions).filter((_, i) => i % 3 === 2))
+          ]
+        }
+      ],
+      bufferViews: [
+        {
+          buffer: 0,
+          byteOffset: 0,
+          byteLength: positions.length * 4,
+          target: 34962 // ARRAY_BUFFER
+        }
+      ],
+      buffers: [
+        {
+          byteLength: positions.length * 4,
+          uri: "data:application/octet-stream;base64," + Buffer.from(positions.buffer).toString('base64')
+        }
+      ]
+    };
+    
+    // Add normals if available
+    if (normals) {
+      gltf.accessors.push({
+        bufferView: 1,
+        componentType: 5126,
+        count: normals.length / 3,
+        type: "VEC3"
+      });
+      gltf.bufferViews.push({
+        buffer: 1,
+        byteOffset: 0,
+        byteLength: normals.length * 4,
+        target: 34962
+      });
+      gltf.buffers.push({
+        byteLength: normals.length * 4,
+        uri: "data:application/octet-stream;base64," + Buffer.from(normals.buffer).toString('base64')
+      });
+    }
+    
+    // Add indices if available
+    if (indices) {
+      gltf.accessors.push({
+        bufferView: normals ? 2 : 1,
+        componentType: indices instanceof Uint16Array ? 5123 : 5125,
+        count: indices.length,
+        type: "SCALAR"
+      });
+      gltf.bufferViews.push({
+        buffer: normals ? 2 : 1,
+        byteOffset: 0,
+        byteLength: indices.length * (indices instanceof Uint16Array ? 2 : 4),
+        target: 34963 // ELEMENT_ARRAY_BUFFER
+      });
+      gltf.buffers.push({
+        byteLength: indices.length * (indices instanceof Uint16Array ? 2 : 4),
+        uri: "data:application/octet-stream;base64," + Buffer.from(indices.buffer).toString('base64')
+      });
+    }
+    
+    const jsonString = JSON.stringify(gltf, null, 2);
+    return Buffer.from(jsonString, 'utf-8');
+    
+  } catch (error) {
+    console.error('GLTF export error:', error);
+    console.error('Design:', JSON.stringify(design, null, 2));
+    throw error;
+  }
 }
 
 export async function exportToOBJ(design) {
