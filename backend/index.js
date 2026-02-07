@@ -285,29 +285,229 @@ app.post('/api/simulate', async (req, res) => {
         } catch (e) { return undefined; }
       };
 
-      // Possible locations for volume: design.volume, design.properties.volume
-      const rawVolume = design.volume || extract(design, 'properties.volume') || extract(design, 'analysis.mass_properties.volume_mm3') || extract(design, 'properties.volume_mm3');
-      const volumeVal = Number(rawVolume || 0);
-
-      // Validate required inputs
+      // CALCULATE VOLUME FROM GEOMETRY if not provided
+      let volumeVal = design.volume || extract(design, 'properties.volume') || extract(design, 'analysis.mass_properties.volume_mm3') || extract(design, 'properties.volume_mm3');
+      
+      // If volume not provided, calculate from geometry parameters
       if (!volumeVal || volumeVal <= 0) {
+        const type = (design.type || '').toLowerCase();
+        const params = design.parameters || {};
+        
+        console.log('Calculating volume from geometry:', { type, params });
+        
+        switch (type) {
+          case 'cube':
+            // Cube or rectangular box
+            const width = params.width || params.size || 50;
+            const height = params.height || params.size || 50;
+            const depth = params.depth || params.size || 50;
+            volumeVal = width * height * depth;
+            break;
+            
+          case 'cylinder':
+            // Cylinder (solid or hollow)
+            const radius = params.radius || 25;
+            const cylHeight = params.height || params.length || 50;
+            if (params.isHollow && params.innerRadius) {
+              // Hollow cylinder: π * (R² - r²) * h
+              volumeVal = Math.PI * (Math.pow(radius, 2) - Math.pow(params.innerRadius, 2)) * cylHeight;
+            } else {
+              // Solid cylinder: π * r² * h
+              volumeVal = Math.PI * Math.pow(radius, 2) * cylHeight;
+            }
+            break;
+            
+          case 'sphere':
+            // Sphere: (4/3) * π * r³
+            const sphereRadius = params.radius || 25;
+            volumeVal = (4/3) * Math.PI * Math.pow(sphereRadius, 3);
+            break;
+            
+          case 'cone':
+            // Cone: (1/3) * π * r² * h
+            const coneRadius = params.baseRadius || params.radius || 25;
+            const coneHeight = params.height || 50;
+            volumeVal = (1/3) * Math.PI * Math.pow(coneRadius, 2) * coneHeight;
+            break;
+            
+          case 'pyramid':
+            // Pyramid: (1/3) * base_area * h
+            const baseWidth = params.baseWidth || 30;
+            const baseDepth = params.baseDepth || 30;
+            const pyrHeight = params.height || 40;
+            volumeVal = (1/3) * baseWidth * baseDepth * pyrHeight;
+            break;
+            
+          case 'prism':
+            // Triangular prism: (1/2) * base * height * length
+            const prismBase = params.baseWidth || 30;
+            const prismHeight = params.baseHeight || 30;
+            const prismLength = params.length || 50;
+            volumeVal = (1/2) * prismBase * prismHeight * prismLength;
+            break;
+            
+          case 'gear':
+          case 'shaft':
+            // Cylindrical shape: π * r² * thickness/length
+            const gearRadius = params.radius || 25;
+            const gearThickness = params.thickness || params.length || 10;
+            volumeVal = Math.PI * Math.pow(gearRadius, 2) * gearThickness;
+            break;
+            
+          case 'bearing':
+            // Ring shape: π * (R² - r²) * thickness
+            const outerRadius = params.outerRadius || params.radius || 30;
+            const innerRadius = params.innerRadius || outerRadius * 0.5;
+            const bearingThickness = params.thickness || 10;
+            volumeVal = Math.PI * (Math.pow(outerRadius, 2) - Math.pow(innerRadius, 2)) * bearingThickness;
+            break;
+            
+          case 'bracket':
+          case 'plate':
+            // Rectangular solid
+            const bracketWidth = params.width || 50;
+            const bracketHeight = params.height || 50;
+            const bracketDepth = params.depth || params.thickness || 10;
+            volumeVal = bracketWidth * bracketHeight * bracketDepth;
+            break;
+            
+          case 'bolt':
+            // Simplified as cylinder
+            const boltRadius = params.radius || 4;
+            const boltLength = params.length || 30;
+            volumeVal = Math.PI * Math.pow(boltRadius, 2) * boltLength;
+            break;
+            
+          default:
+            // Generic rectangular solid
+            const genWidth = params.width || 50;
+            const genHeight = params.height || 50;
+            const genDepth = params.depth || params.thickness || 10;
+            volumeVal = genWidth * genHeight * genDepth;
+        }
+        
+        console.log('Calculated volume:', volumeVal, 'mm³');
+      }
+      
+      volumeVal = Number(volumeVal || 0);
+
+      // MANDATORY VALIDATION: Volume must be valid and positive
+      if (!volumeVal || volumeVal <= 0 || !Number.isFinite(volumeVal)) {
         return res.status(400).json({
           success: false,
-          error: 'Design volume is required and must be greater than zero',
+          error: 'Volume is zero or invalid. Cannot compute mass properties.',
+          details: `CAD geometry must have valid volume (mm³) greater than zero. Type: ${design.type}, Parameters: ${JSON.stringify(design.parameters)}`,
           simulationType: 'mass_properties',
           step: 'STEP 1',
           status: 'FAILED'
         });
       }
 
-      // Surface area may be in design.surfaceArea or nested
-      const surfaceAreaVal = Number(design.surfaceArea || extract(design, 'properties.surfaceArea') || extract(design, 'analysis.mass_properties.surface_area') || 0);
+      // Surface area may be in design.surfaceArea or nested - CALCULATE if not provided
+      let surfaceAreaVal = design.surfaceArea || extract(design, 'properties.surfaceArea') || extract(design, 'analysis.mass_properties.surface_area');
+      
+      // Calculate surface area from geometry if not provided
+      if (!surfaceAreaVal || surfaceAreaVal <= 0) {
+        const type = (design.type || '').toLowerCase();
+        const params = design.parameters || {};
+        
+        switch (type) {
+          case 'cube':
+            const width = params.width || params.size || 50;
+            const height = params.height || params.size || 50;
+            const depth = params.depth || params.size || 50;
+            surfaceAreaVal = 2 * (width * height + width * depth + height * depth);
+            break;
+            
+          case 'cylinder':
+            const radius = params.radius || 25;
+            const cylHeight = params.height || params.length || 50;
+            if (params.isHollow && params.innerRadius) {
+              // Hollow cylinder: outer + inner + 2 * ring areas
+              const outerSurface = 2 * Math.PI * radius * cylHeight;
+              const innerSurface = 2 * Math.PI * params.innerRadius * cylHeight;
+              const ringArea = Math.PI * (Math.pow(radius, 2) - Math.pow(params.innerRadius, 2));
+              surfaceAreaVal = outerSurface + innerSurface + 2 * ringArea;
+            } else {
+              // Solid cylinder: 2πrh + 2πr²
+              surfaceAreaVal = 2 * Math.PI * radius * cylHeight + 2 * Math.PI * Math.pow(radius, 2);
+            }
+            break;
+            
+          case 'sphere':
+            const sphereRadius = params.radius || 25;
+            surfaceAreaVal = 4 * Math.PI * Math.pow(sphereRadius, 2);
+            break;
+            
+          case 'cone':
+            const coneRadius = params.baseRadius || params.radius || 25;
+            const coneHeight = params.height || 50;
+            const slantHeight = Math.sqrt(Math.pow(coneRadius, 2) + Math.pow(coneHeight, 2));
+            surfaceAreaVal = Math.PI * coneRadius * slantHeight + Math.PI * Math.pow(coneRadius, 2);
+            break;
+            
+          default:
+            // Approximate as rectangular solid
+            const w = params.width || 50;
+            const h = params.height || 50;
+            const d = params.depth || params.thickness || 10;
+            surfaceAreaVal = 2 * (w * h + w * d + h * d);
+        }
+      }
+      
+      surfaceAreaVal = Number(surfaceAreaVal || 0);
 
-      // Center of mass extraction
+      // Center of mass extraction - default to geometric center (0,0,0)
       const comObj = design.centerOfMass || extract(design, 'properties.centerOfMass') || extract(design, 'analysis.mass_properties.center_of_mass') || { x: 0, y: 0, z: 0 };
 
-      // Moments of inertia extraction
-      const inertiaObj = design.inertia || extract(design, 'properties.inertia') || extract(design, 'analysis.mass_properties.moments_of_inertia') || {};
+      // Moments of inertia extraction - calculate basic approximations if not provided
+      let inertiaObj = design.inertia || extract(design, 'properties.inertia') || extract(design, 'analysis.mass_properties.moments_of_inertia') || {};
+      
+      // Calculate basic moments of inertia if not provided
+      if (!inertiaObj.Ixx && !inertiaObj.Ixx_kg_mm2) {
+        const type = (design.type || '').toLowerCase();
+        const params = design.parameters || {};
+        
+        // Simplified MOI calculations (will be multiplied by mass later)
+        switch (type) {
+          case 'cube':
+            const w = params.width || params.size || 50;
+            const h = params.height || params.size || 50;
+            const d = params.depth || params.size || 50;
+            // For a rectangular solid: I = (1/12) * m * (h² + d²)
+            inertiaObj.Ixx = (Math.pow(h, 2) + Math.pow(d, 2)) / 12;
+            inertiaObj.Iyy = (Math.pow(w, 2) + Math.pow(d, 2)) / 12;
+            inertiaObj.Izz = (Math.pow(w, 2) + Math.pow(h, 2)) / 12;
+            break;
+            
+          case 'cylinder':
+            const r = params.radius || 25;
+            const cylH = params.height || params.length || 50;
+            // For a cylinder: Ixx = Iyy = (1/12) * m * (3r² + h²), Izz = (1/2) * m * r²
+            inertiaObj.Ixx = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
+            inertiaObj.Iyy = (3 * Math.pow(r, 2) + Math.pow(cylH, 2)) / 12;
+            inertiaObj.Izz = Math.pow(r, 2) / 2;
+            break;
+            
+          case 'sphere':
+            const sR = params.radius || 25;
+            // For a sphere: I = (2/5) * m * r²
+            const sphereI = (2/5) * Math.pow(sR, 2);
+            inertiaObj.Ixx = sphereI;
+            inertiaObj.Iyy = sphereI;
+            inertiaObj.Izz = sphereI;
+            break;
+            
+          default:
+            // Default approximation
+            const defW = params.width || 50;
+            const defH = params.height || 50;
+            const defD = params.depth || 10;
+            inertiaObj.Ixx = (Math.pow(defH, 2) + Math.pow(defD, 2)) / 12;
+            inertiaObj.Iyy = (Math.pow(defW, 2) + Math.pow(defD, 2)) / 12;
+            inertiaObj.Izz = (Math.pow(defW, 2) + Math.pow(defH, 2)) / 12;
+        }
+      }
 
       // Get material density (kg/m³)
       const materialDensities = {
@@ -329,13 +529,45 @@ app.post('/api/simulate', async (req, res) => {
       if (densityOverride !== null && densityOverride !== undefined && Number(densityOverride) > 0) {
         density_kg_m3 = Number(densityOverride);
       } else {
-        density_kg_m3 = materialDensities[material] || 7850; // Default: Structural Steel
+        density_kg_m3 = materialDensities[material];
+        
+        // MANDATORY VALIDATION: Density must be defined
+        if (!density_kg_m3 || density_kg_m3 <= 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Density is undefined for material: ${material}`,
+            details: 'Material density must be defined in kg/m³. Please select a valid material.',
+            simulationType: 'mass_properties',
+            step: 'STEP 1',
+            status: 'FAILED'
+          });
+        }
       }
 
       // MANDATORY UNIT CONVERSION: volume_mm3 × 1e-9 × density_kg_m3 = mass_kg
-      // 1 mm³ = 1e-9 m³
+      // All CAD geometry is in millimeters (mm)
+      // Volume from CAD is in mm³
+      // Convert to m³: volume_m3 = volume_mm3 × 1e-9
+      // Calculate mass: mass_kg = density_kg_per_m3 × volume_m3
       const volume_m3 = volumeVal * 1e-9;
-      const mass_kg = volume_m3 * density_kg_m3;
+      const mass_kg = density_kg_m3 * volume_m3;
+
+      // Validate computed mass
+      if (!Number.isFinite(mass_kg) || mass_kg <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Computed mass is invalid',
+          details: `Mass calculation failed. Volume: ${volumeVal} mm³, Density: ${density_kg_m3} kg/m³`,
+          simulationType: 'mass_properties',
+          step: 'STEP 1',
+          status: 'FAILED'
+        });
+      }
+      
+      // Calculate actual moments of inertia (multiply by mass)
+      const Ixx_kg_mm2 = (inertiaObj.Ixx || inertiaObj.Ixx_kg_mm2 || 0) * mass_kg;
+      const Iyy_kg_mm2 = (inertiaObj.Iyy || inertiaObj.Iyy_kg_mm2 || 0) * mass_kg;
+      const Izz_kg_mm2 = (inertiaObj.Izz || inertiaObj.Izz_kg_mm2 || 0) * mass_kg;
 
       const massPropertiesResult = {
         success: true,
@@ -345,23 +577,23 @@ app.post('/api/simulate', async (req, res) => {
         message: 'Mass properties computed successfully. Ready for STEP 2 simulations.',
         mass_properties: {
           volume_mm3: Math.round(volumeVal * 100) / 100,
-          volume_m3: Math.round(volume_m3 * 1e8) / 1e8,
-          surface_area_mm2: Number(surfaceAreaVal) || 0,
-          mass_kg: Math.round(mass_kg * 10000) / 10000,
+          volume_m3: volume_m3,
+          surface_area_mm2: Math.round((Number(surfaceAreaVal) || 0) * 100) / 100,
+          mass_kg: mass_kg,
           center_of_mass: {
-            x_mm: comObj.x || comObj.x_mm || 0,
-            y_mm: comObj.y || comObj.y_mm || 0,
-            z_mm: comObj.z || comObj.z_mm || 0
+            x_mm: Number(comObj.x || comObj.x_mm || 0),
+            y_mm: Number(comObj.y || comObj.y_mm || 0),
+            z_mm: Number(comObj.z || comObj.z_mm || 0)
           },
           moments_of_inertia: {
-            Ixx_kg_mm2: inertiaObj.Ixx || inertiaObj.Ixx_kg_mm2 || 0,
-            Iyy_kg_mm2: inertiaObj.Iyy || inertiaObj.Iyy_kg_mm2 || 0,
-            Izz_kg_mm2: inertiaObj.Izz || inertiaObj.Izz_kg_mm2 || 0
+            Ixx_kg_mm2: Number(Ixx_kg_mm2),
+            Iyy_kg_mm2: Number(Iyy_kg_mm2),
+            Izz_kg_mm2: Number(Izz_kg_mm2)
           },
-          unit_conversion: {
-            description: 'volume_mm3 × 1e-9 × density_kg_m3 = mass_kg',
+          unit_conversion_details: {
+            description: 'mass_kg = density_kg_per_m3 × volume_m3 = density × volume_mm3 × 1e-9',
             volume_mm3: volumeVal,
-            unit_factor: 1e-9,
+            conversion_factor: 1e-9,
             volume_m3: volume_m3,
             density_kg_m3: density_kg_m3,
             mass_kg: mass_kg

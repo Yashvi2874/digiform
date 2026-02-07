@@ -4,8 +4,14 @@ import { Weight, Zap, Box, Target, Gauge } from 'lucide-react';
 /**
  * Displays mass properties with proper formatting and units
  * STEP 1 Results: Volume, Mass, Surface Area, COM, MOI
+ * 
+ * UNIT-SAFE IMPLEMENTATION:
+ * - Material density in kg/m³
+ * - CAD geometry in millimeters (mm)
+ * - Volume in mm³
+ * - Mass calculated using: mass_kg = density_kg_per_m3 × volume_m3 = density × volume_mm3 × 1e-9
  */
-export default function MassPropertiesDisplay({ massProperties, status = 'PENDING' }) {
+export default function MassPropertiesDisplay({ massProperties, status = 'PENDING', material = null }) {
   if (!massProperties) {
     return (
       <div className="p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
@@ -24,6 +30,7 @@ export default function MassPropertiesDisplay({ massProperties, status = 'PENDIN
 
   // Format large numbers with commas
   const formatNumber = (value, decimals = 2) => {
+    if (!value || !Number.isFinite(Number(value))) return '0.00';
     return parseFloat(value).toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
@@ -51,13 +58,13 @@ export default function MassPropertiesDisplay({ massProperties, status = 'PENDIN
           <div>
             <p className="text-xs text-gray-400 mb-1">Volume</p>
             <p className="text-lg font-bold text-blue-300">
-              {formatNumber(volume_mm3, 2)} <span className="text-xs text-gray-500">mm³</span>
+              {formatNumber(volume_mm3 * 1e-3, 3)} <span className="text-xs text-gray-500">cm³</span>
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">Surface Area</p>
             <p className="text-lg font-bold text-blue-300">
-              {formatNumber(surface_area_mm2, 2)} <span className="text-xs text-gray-500">mm²</span>
+              {formatNumber(surface_area_mm2 * 1e-2, 2)} <span className="text-xs text-gray-500">cm²</span>
             </p>
           </div>
         </div>

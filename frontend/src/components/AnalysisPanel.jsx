@@ -27,8 +27,27 @@ export default function AnalysisPanel() {
     addSimulationToHistory,
     setSimulationLoading,
     currentSimulationLoading,
-    currentSimulationType
+    currentSimulationType,
+    clearMassProperties
   } = useDesignStore();
+
+  // Material densities (kg/m³) - MUST match backend exactly
+  const materialDensities = {
+    'Structural Steel': 7850,
+    'Steel': 7850,
+    'Aluminum': 2700,
+    'Titanium': 4500,
+    'Copper': 8960,
+    'Brass': 8470,
+    'Plastic': 1200,
+    'Composite': 1600,
+    'Cast Iron': 7200,
+    'Stainless Steel': 7750,
+    'Magnesium': 1800
+  };
+
+  // Get current density based on selected material
+  const currentDensity = materialDensities[selectedMaterial] || 7850;
 
   const handleRunMassProperties = async () => {
     if (!currentDesign) {
@@ -37,6 +56,8 @@ export default function AnalysisPanel() {
     }
 
     setMassPropertiesLoading(true);
+    setMassPropertiesError(null); // Clear previous errors
+    
     try {
       const result = await runMassPropertiesSimulation(
         currentDesign,
@@ -44,7 +65,13 @@ export default function AnalysisPanel() {
       );
 
       if (result.success) {
-        setMassProperties(result.mass_properties);
+        // Store both mass properties and material info
+        const enrichedMassProperties = {
+          ...result.mass_properties,
+          material: result.material
+        };
+        
+        setMassProperties(enrichedMassProperties);
         addSimulationToHistory({
           type: 'mass_properties',
           material: selectedMaterial,
@@ -54,7 +81,8 @@ export default function AnalysisPanel() {
         setMassPropertiesError(result.error || 'Failed to compute mass properties');
       }
     } catch (error) {
-      setMassPropertiesError(error.response?.data?.error || error.message);
+      const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message;
+      setMassPropertiesError(errorMessage);
       console.error('Mass properties error:', error);
     } finally {
       setMassPropertiesLoading(false);
@@ -165,10 +193,27 @@ export default function AnalysisPanel() {
           {/* Material Selection */}
           <div>
             <h3 className="text-lg font-semibold mb-3 text-gray-200">📦 Material Selection</h3>
+            
+            {/* Warning if material changed after computation */}
+            {massPropertiesComputed && (
+              <div className="mb-3 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
+                <p className="text-sm text-yellow-300">
+                  ⚠️ Changing material will require recomputing STEP 1
+                </p>
+              </div>
+            )}
+            
             <MaterialInfo
               material={selectedMaterial}
-              density={7850} // TODO: Get from store
-              onMaterialChange={setSelectedMaterial}
+              density={currentDensity}
+              onMaterialChange={(newMaterial) => {
+                setSelectedMaterial(newMaterial);
+                // Clear mass properties when material changes
+                if (massPropertiesComputed) {
+                  clearMassProperties();
+                  setMassPropertiesError('Material changed. Please recompute STEP 1.');
+                }
+              }}
             />
           </div>
 
@@ -216,6 +261,7 @@ export default function AnalysisPanel() {
             {massProperties && !massPropertiesError && (
               <MassPropertiesDisplay
                 massProperties={massProperties}
+                material={massProperties.material || { name: selectedMaterial, density_kg_m3: currentDensity }}
                 status={massPropertiesComputed ? 'COMPLETE' : 'PENDING'}
               />
             )}
