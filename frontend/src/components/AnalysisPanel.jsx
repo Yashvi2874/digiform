@@ -37,6 +37,9 @@ export default function AnalysisPanel() {
 
   // Ref for auto-scrolling to structural analysis section
   const structuralAnalysisRef = useRef(null);
+  
+  // Ref for auto-scrolling to structural results
+  const structuralResultsRef = useRef(null);
 
   // State for inline structural analysis
   const [showStructuralAnalysis, setShowStructuralAnalysis] = useState(false);
@@ -59,6 +62,13 @@ export default function AnalysisPanel() {
     { value: 'forward', label: '+Z (Forward)', vector: [0, 0, 1] },
     { value: 'backward', label: '-Z (Backward)', vector: [0, 0, -1] }
   ];
+
+  // Reset structural analysis UI on component mount (page refresh)
+  useEffect(() => {
+    setShowStructuralAnalysis(false);
+    setStructuralResults(null);
+    setStructuralError(null);
+  }, []);
 
   // Close structural analysis when switching designs or when STEP 1 is not complete
   useEffect(() => {
@@ -148,8 +158,7 @@ export default function AnalysisPanel() {
     // Toggle the structural analysis section
     if (!showStructuralAnalysis) {
       setShowStructuralAnalysis(true);
-      // Auto-run analysis when opening
-      setTimeout(() => runStructuralAnalysis(), 100);
+      // Don't auto-run - wait for user to click "Run Analysis" button
     }
   };
 
@@ -216,6 +225,16 @@ export default function AnalysisPanel() {
           material: selectedMaterial,
           results: data.results
         });
+        
+        // Auto-scroll to results after a short delay
+        setTimeout(() => {
+          if (structuralResultsRef.current) {
+            structuralResultsRef.current.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'start'
+            });
+          }
+        }, 300);
       } else {
         setStructuralError(data.error || 'Analysis failed');
       }
@@ -455,7 +474,10 @@ export default function AnalysisPanel() {
 
                 {/* Results Display */}
                 {structuralResults && (
-                  <div className="space-y-3 border-t border-gray-700 pt-4">
+                  <div 
+                    ref={structuralResultsRef}
+                    className="space-y-3 border-t border-gray-700 pt-4"
+                  >
                     <div className="flex items-center gap-2 mb-3">
                       <CheckCircle className="w-6 h-6 text-green-400" />
                       <h4 className="text-lg font-bold text-white">Analysis Results</h4>
