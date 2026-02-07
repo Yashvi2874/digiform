@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env' });
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
@@ -193,9 +194,248 @@ app.post('/api/export', async (req, res) => {
   }
 });
 
+import { spawn } from 'child_process';
+import path from 'path';
+
+// CAD Engine Integration
+app.post('/api/cad/process', async (req, res) => {
+  try {
+    const { description } = req.body;
+    
+    // Call Python CAD engine
+    const pythonPath = process.env.PYTHON_PATH || 'python';
+    const cadScript = path.join(__dirname, 'python_backend', 'digiform_cad.py');
+    
+    const pythonProcess = spawn(pythonPath, [
+      '-c',
+      `
+import sys
+import json
+sys.path.append('${path.join(__dirname, 'python_backend')}')
+from digiform_cad import DigiformCADEngine
+
+engine = DigiformCADEngine()
+result = engine.process_natural_language('''${description}''')
+print(json.dumps(result))
+engine.close()
+      `
+    ]);
+    
+    let output = '';
+    let errorOutput = '';
+    
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(output.trim());
+          res.json(result);
+        } catch (parseError) {
+          res.status(500).json({ 
+            error: 'Failed to parse CAD engine output',
+            details: parseError.message 
+          });
+        }
+      } else {
+        res.status(500).json({ 
+          error: 'CAD engine execution failed',
+          details: errorOutput || `Process exited with code ${code}`
+        });
+      }
+    });
+    
+  } catch (error) {
+    console.error('CAD processing error:', error);
+    res.status(500).json({ error: 'Failed to process CAD request', details: error.message });
+  }
+});
+
+app.post('/api/cad/modify', async (req, res) => {
+  try {
+    const { modifications } = req.body;
+    
+    // Call Python modification endpoint
+    const pythonPath = process.env.PYTHON_PATH || 'python';
+    
+    const pythonProcess = spawn(pythonPath, [
+      '-c',
+      `
+import sys
+import json
+sys.path.append('${path.join(__dirname, 'python_backend')}')
+from digiform_cad import DigiformCADEngine
+
+engine = DigiformCADEngine()
+result = engine.modify_model('''${modifications}''')
+print(json.dumps(result))
+engine.close()
+      `
+    ]);
+    
+    let output = '';
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(output.trim());
+          res.json(result);
+        } catch (parseError) {
+          res.status(500).json({ 
+            error: 'Failed to parse modification result',
+            details: parseError.message 
+          });
+        }
+      } else {
+        res.status(500).json({ error: 'Modification failed' });
+      }
+    });
+    
+  } catch (error) {
+    console.error('CAD modification error:', error);
+    res.status(500).json({ error: 'Failed to modify CAD model', details: error.message });
+  }
+});
+
+app.post('/api/cad/export', async (req, res) => {
+  try {
+    const { format = 'stl' } = req.body;
+    
+    // Call Python export endpoint
+    const pythonPath = process.env.PYTHON_PATH || 'python';
+    
+    const pythonProcess = spawn(pythonPath, [
+      '-c',
+      `
+import sys
+import json
+sys.path.append('${path.join(__dirname, 'python_backend')}')
+from digiform_cad import DigiformCADEngine
+
+engine = DigiformCADEngine()
+result = engine.export_model('${format}')
+print(json.dumps(result))
+engine.close()
+      `
+    ]);
+    
+    let output = '';
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(output.trim());
+          if (result.success && result.filepath) {
+            // Read and send the file
+            const fs = require('fs');
+            const fileBuffer = fs.readFileSync(result.filepath);
+            res.setHeader('Content-Type', getContentType(format));
+            res.setHeader('Content-Disposition', `attachment; filename="model.${format}"`);
+            res.send(fileBuffer);
+          } else {
+            res.status(500).json(result);
+          }
+        } catch (parseError) {
+          res.status(500).json({ 
+            error: 'Failed to parse export result',
+            details: parseError.message 
+          });
+        }
+      } else {
+        res.status(500).json({ error: 'Export failed' });
+      }
+    });
+    
+  } catch (error) {
+    console.error('CAD export error:', error);
+    res.status(500).json({ error: 'Failed to export CAD model', details: error.message });
+  }
+});
+
+function getContentType(format) {
+  const contentTypes = {
+    'stl': 'application/sla',
+    'step': 'application/step',
+    'obj': 'text/plain'
+  };
+  return contentTypes[format.toLowerCase()] || 'application/octet-stream';
+}
+
+// Enhanced CAD Engine Integration with proper approval workflow
+app.post('/api/cad/enhanced', async (req, res) => {
+  try {
+    const { description } = req.body;
+    
+    // Import and use enhanced CAD engine
+    const { spawn } = require('child_process');
+    const path = require('path');
+    
+    const pythonProcess = spawn('python', [
+      '-c',
+      `
+import sys
+import json
+sys.path.append('${path.join(__dirname, '')}')
+from enhanced_cad_engine import EnhancedCADEngine
+
+engine = EnhancedCADEngine()
+result = engine.process_description('''${description}''')
+print(json.dumps(result))
+      `
+    ]);
+    
+    let output = '';
+    let errorOutput = '';
+    
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(output.trim());
+          res.json(result);
+        } catch (parseError) {
+          res.status(500).json({ 
+            error: 'Failed to parse enhanced CAD engine output',
+            details: parseError.message 
+          });
+        }
+      } else {
+        res.status(500).json({ 
+          error: 'Enhanced CAD engine execution failed',
+          details: errorOutput || `Process exited with code ${code}`
+        });
+      }
+    });
+    
+  } catch (error) {
+    console.error('Enhanced CAD processing error:', error);
+    res.status(500).json({ error: 'Failed to process enhanced CAD request', details: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 DigiForm API running on port ${PORT}`);
   console.log(`📁 Output directory: ${outputDir}`);
   console.log(`🗄️  MongoDB connected`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔧 Enhanced CAD Engine: Ready for parametric modeling`);
 });

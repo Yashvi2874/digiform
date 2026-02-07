@@ -50,8 +50,45 @@ function createShaftGeometry(radius, length) {
   return geometry;
 }
 
-function createBearingGeometry(outerRadius, innerRadius) {
-  return new THREE.TorusGeometry(outerRadius, innerRadius, 24, 48);
+function createDottedLine(points, dashSize = 0.5, gapSize = 0.3) {
+  const geometry = new THREE.BufferGeometry();
+  const vertices = [];
+  
+  for (let i = 0; i < points.length - 1; i++) {
+    const start = points[i];
+    const end = points[i + 1];
+    
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const length = direction.length();
+    direction.normalize();
+    
+    let currentPos = start.clone();
+    let isDash = true;
+    
+    while (currentPos.distanceTo(start) < length) {
+      const segmentLength = isDash ? dashSize : gapSize;
+      const nextPos = currentPos.clone().add(direction.clone().multiplyScalar(segmentLength));
+      
+      if (isDash) {
+        // Add dash segment
+        vertices.push(currentPos.x, currentPos.y, currentPos.z);
+        vertices.push(nextPos.x, nextPos.y, nextPos.z);
+      }
+      
+      currentPos = nextPos;
+      isDash = !isDash;
+    }
+  }
+  
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  return geometry;
+}
+
+function getBoundingBoxCenter(geometry) {
+  geometry.computeBoundingBox();
+  const center = new THREE.Vector3();
+  geometry.boundingBox.getCenter(center);
+  return center;
 }
 
 function createBracketGeometry(width, height, depth) {
@@ -92,11 +129,43 @@ function createBracketGeometry(width, height, depth) {
   });
 }
 
-export default function ComponentMesh({ design, autoRotate = true }) {
+export default function ComponentMesh({ design, autoRotate = true, showCenterLines = false }) {
   const meshRef = useRef();
   const heatmapRef = useRef();
+  const centerRef = useRef();
 
   const geometry = useMemo(() => {
+    // Use enhanced geometry if available
+    if (design.geometry && design.geometry.vertices && design.geometry.indices) {
+      try {
+        const geometry = new THREE.BufferGeometry();
+        
+        // Create position attribute from vertices
+        const positions = new Float32Array(design.geometry.vertices);
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        // Create normal attribute if available
+        if (design.geometry.normals && design.geometry.normals.length === design.geometry.vertices.length) {
+          const normals = new Float32Array(design.geometry.normals);
+          geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        }
+        
+        // Create index attribute if available
+        if (design.geometry.indices && design.geometry.indices.length > 0) {
+          const indices = new Uint32Array(design.geometry.indices);
+          geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        } else {
+          // Compute normals if not provided
+          geometry.computeVertexNormals();
+        }
+        
+        return geometry;
+      } catch (error) {
+        console.log('Enhanced geometry creation failed, falling back to basic geometry');
+      }
+    }
+    
+    // Fallback to basic geometry creation
     const { type, parameters } = design;
     
     switch (type.toLowerCase()) {
@@ -123,6 +192,68 @@ export default function ComponentMesh({ design, autoRotate = true }) {
           parameters.height || 50,
           parameters.depth || 10
         );
+      case 'bolt':
+        // Create bolt geometry (cylinder with hex head)
+        return new THREE.CylinderGeometry(
+          parameters.radius || 4,
+          parameters.radius || 4,
+          parameters.length || 30,
+          16
+        );
+      case 'cube':
+        return new THREE.BoxGeometry(
+          parameters.size || 50,
+          parameters.size || 50,
+          parameters.size || 50
+        );
+      case 'prism':
+        // Create triangular prism using extrusion
+        const prismShape = new THREE.Shape();
+        const halfWidth = (parameters.baseWidth || 30) / 2;
+        const halfHeight = (parameters.baseHeight || 30) / 2;
+        prismShape.moveTo(0, halfHeight);
+        prismShape.lineTo(-halfWidth, -halfHeight);
+        prismShape.lineTo(halfWidth, -halfHeight);
+        prismShape.lineTo(0, halfHeight);
+        return new THREE.ExtrudeGeometry(prismShape, {
+          depth: parameters.length || 50,
+          bevelEnabled: false
+        });
+      case 'cylinder':
+        const cylinderGeo = new THREE.CylinderGeometry(
+          parameters.radius || 25,
+          parameters.radius || 25,
+          parameters.height || 50,
+          32
+        );
+        cylinderGeo.rotateX(Math.PI / 2);
+        return cylinderGeo;
+      case 'sphere':
+        return new THREE.SphereGeometry(
+          parameters.radius || 25,
+          32,
+          32
+        );
+      case 'cone':
+        return new THREE.ConeGeometry(
+          parameters.baseRadius || 25,
+          parameters.height || 50,
+          32
+        );
+      case 'pyramid':
+        // Create square pyramid
+        const pyramidShape = new THREE.Shape();
+        const halfBaseWidth = (parameters.baseWidth || 30) / 2;
+        const halfBaseDepth = (parameters.baseDepth || 30) / 2;
+        pyramidShape.moveTo(-halfBaseWidth, -halfBaseDepth);
+        pyramidShape.lineTo(halfBaseWidth, -halfBaseDepth);
+        pyramidShape.lineTo(halfBaseWidth, halfBaseDepth);
+        pyramidShape.lineTo(-halfBaseWidth, halfBaseDepth);
+        pyramidShape.lineTo(-halfBaseWidth, -halfBaseDepth);
+        return new THREE.ExtrudeGeometry(pyramidShape, {
+          depth: parameters.height || 40,
+          bevelEnabled: false
+        });
       default:
         return new THREE.BoxGeometry(
           parameters.width || 50,
@@ -131,6 +262,17 @@ export default function ComponentMesh({ design, autoRotate = true }) {
         );
     }
   }, [design]);
+
+  // Calculate model center after geometry is created
+  useEffect(() => {
+    if (meshRef.current && geometry) {
+      // Compute bounding box to get actual center
+      geometry.computeBoundingBox();
+      const center = new THREE.Vector3();
+      geometry.boundingBox.getCenter(center);
+      centerRef.current = center;
+    }
+  }, [geometry]);
 
   // Create vertex colors for heatmap
   useEffect(() => {
@@ -163,6 +305,7 @@ export default function ComponentMesh({ design, autoRotate = true }) {
   }, [design.analysis]);
 
   useFrame((state) => {
+    // Only rotate internally if not controlled by OrbitControls
     if (meshRef.current && autoRotate) {
       meshRef.current.rotation.y = state.clock.getElapsedTime() * 0.3;
     }
@@ -193,6 +336,69 @@ export default function ComponentMesh({ design, autoRotate = true }) {
     if (ratio < 0.85) return '#ff7f00'; // Orange
     return '#ff0000'; // Red
   };
+
+  // Create dotted centerlines from model center
+  const centerLines = useMemo(() => {
+    if (!showCenterLines || !centerRef.current) return null;
+    
+    const center = centerRef.current;
+    const length = 40; // Length of center lines
+    
+    return (
+      <group position={center}>
+        {/* X-axis dotted line */}
+        <line>
+          <bufferGeometry attach="geometry" args={[createDottedLine([
+            new THREE.Vector3(-length, 0, 0),
+            new THREE.Vector3(length, 0, 0)
+          ])]} />
+          <lineDashedMaterial 
+            attach="material"
+            color="#ffffff"
+            dashSize={0.8}
+            gapSize={0.4}
+            linewidth={2}
+          />
+        </line>
+        
+        {/* Y-axis dotted line */}
+        <line>
+          <bufferGeometry attach="geometry" args={[createDottedLine([
+            new THREE.Vector3(0, -length, 0),
+            new THREE.Vector3(0, length, 0)
+          ])]} />
+          <lineDashedMaterial 
+            attach="material"
+            color="#ffffff"
+            dashSize={0.8}
+            gapSize={0.4}
+            linewidth={2}
+          />
+        </line>
+        
+        {/* Z-axis dotted line */}
+        <line>
+          <bufferGeometry attach="geometry" args={[createDottedLine([
+            new THREE.Vector3(0, 0, -length),
+            new THREE.Vector3(0, 0, length)
+          ])]} />
+          <lineDashedMaterial 
+            attach="material"
+            color="#ffffff"
+            dashSize={0.8}
+            gapSize={0.4}
+            linewidth={2}
+          />
+        </line>
+        
+        {/* Center point */}
+        <mesh position={[0, 0, 0]}>
+          <sphereGeometry args={[0.6, 16, 16]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+      </group>
+    );
+  }, [centerRef.current, showCenterLines]);
 
   return (
     <group>
@@ -226,6 +432,9 @@ export default function ComponentMesh({ design, autoRotate = true }) {
           />
         </mesh>
       )}
+      
+      {/* Dotted Center Axis Lines - Aligned to model center */}
+      {centerLines}
     </group>
   );
 }

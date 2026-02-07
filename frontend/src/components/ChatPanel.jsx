@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Bot, User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
-import { sendMessage, approveDesign, rejectDesign } from '../services/api';
+import { useDesignStore } from '../store/designStore';
+import { sendMessage, approveDesign, rejectDesign, generateDesign } from '../services/api';
 
 export default function ChatPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const messagesEndRef = useRef(null);
   const { messages, addMessage, sessionId } = useChatStore();
+  const { addDesign } = useDesignStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -75,6 +78,57 @@ export default function ChatPanel() {
     }
   };
 
+  const handleGenerateCAD = async (design) => {
+    if (generating) return;
+    
+    setGenerating(true);
+    try {
+      // Generate the actual CAD model using the enhanced engine
+      const cadResult = await generateDesign(design.description);
+      
+      if (cadResult && cadResult.success) {
+        // Merge the enhanced CAD data with the design
+        const enhancedDesign = {
+          ...design,
+          ...cadResult,
+          geometry: cadResult.geometry,
+          properties: cadResult.properties,
+          featureChecklist: cadResult.featureChecklist
+        };
+        
+        // Add to design store for visualization
+        addDesign(enhancedDesign);
+        
+        // Add confirmation message
+        addMessage({
+          role: 'assistant',
+          content: '✅ CAD model generated successfully! Check the 3D viewer to see your design.',
+          design: enhancedDesign
+        });
+      } else {
+        // Fallback to basic design
+        addDesign(design);
+        addMessage({
+          role: 'assistant',
+          content: '✅ Design created! Check the 3D viewer to see your model.',
+          design: design
+        });
+      }
+    } catch (error) {
+      console.error('CAD generation error:', error);
+      // Fallback to basic design
+      addDesign(design);
+      addMessage({
+        role: 'assistant',
+        content: '⚠️ Advanced CAD generation failed. Using basic model generation.',
+        design: design,
+        error: true
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-dark to-dark-light">
       {/* Chat Header */}
@@ -136,12 +190,53 @@ export default function ChatPanel() {
                     <p><strong>Type:</strong> {message.design.type}</p>
                     <p><strong>Material:</strong> {message.design.material}</p>
                     <p><strong>Complexity:</strong> {message.design.complexity}</p>
-                    {message.design.parameters && (
+                    
+                    {/* User-defined dimensions */}
+                    {message.design.parameters && Object.keys(message.design.parameters).length > 0 && (
                       <div className="mt-2">
-                        <p className="text-gray-500">Parameters:</p>
-                        <pre className="text-xs text-gray-400 mt-1">
-                          {JSON.stringify(message.design.parameters, null, 2)}
-                        </pre>
+                        <p className="text-gray-500">Your Dimensions:</p>
+                        <div className="grid grid-cols-2 gap-1 mt-1">
+                          {Object.entries(message.design.parameters).map(([key, value]) => (
+                            typeof value === 'number' && value > 0 ? (
+                              <div key={key} className="bg-dark-light p-1 rounded">
+                                <span className="text-gray-400">{key}:</span>
+                                <span className="text-white font-mono ml-1">{value}mm</span>
+                              </div>
+                            ) : null
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Enhanced properties */}
+                    {message.design.properties && (
+                      <div className="mt-2">
+                        <p className="text-gray-500">Properties:</p>
+                        <div className="grid grid-cols-2 gap-1 mt-1 text-xs">
+                          <div className="bg-dark-light p-1 rounded">
+                            <span className="text-gray-400">Volume:</span>
+                            <span className="text-white ml-1">{message.design.properties.volume} mm³</span>
+                          </div>
+                          <div className="bg-dark-light p-1 rounded">
+                            <span className="text-gray-400">Mass:</span>
+                            <span className="text-white ml-1">{message.design.properties.mass} g</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Feature checklist */}
+                    {message.design.featureChecklist && message.design.featureChecklist.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-gray-500">Features:</p>
+                        <ul className="text-xs mt-1 space-y-1">
+                          {message.design.featureChecklist.map((item, i) => (
+                            <li key={i} className="flex items-center gap-1">
+                              <span className="text-green-500">✓</span>
+                              <span className="text-gray-300">{item.replace('✓ ', '')}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -156,7 +251,26 @@ export default function ChatPanel() {
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    Approve
+                    Approve Design
+                  </button>
+                  <button
+                    onClick={() => handleGenerateCAD(message.design)}
+                    disabled={generating}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    {generating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Generate CAD
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={() => handleReject(index, message.designId)}

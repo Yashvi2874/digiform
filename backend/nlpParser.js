@@ -1,39 +1,23 @@
 export function parseComponentDescription(description) {
   const lower = description.toLowerCase();
   
-  // Detect component type
-  let type = 'bracket';
-  if (lower.includes('gear')) type = 'gear';
-  else if (lower.includes('shaft')) type = 'shaft';
-  else if (lower.includes('bearing')) type = 'bearing';
-  else if (lower.includes('bracket') || lower.includes('mount')) type = 'bracket';
-  else if (lower.includes('plate')) type = 'plate';
-  else if (lower.includes('bolt') || lower.includes('screw')) type = 'bolt';
+  // Enhanced component type detection with better keyword matching
+  let type = detectComponentType(lower);
   
   // Extract dimensions
   const dimensions = extractDimensions(description);
   
   // Detect material
-  let material = 'Steel';
-  if (lower.includes('aluminum') || lower.includes('aluminium')) material = 'Aluminum';
-  else if (lower.includes('titanium')) material = 'Titanium';
-  else if (lower.includes('brass')) material = 'Brass';
-  else if (lower.includes('copper')) material = 'Copper';
+  let material = detectMaterial(lower);
   
   // Determine complexity
-  let complexity = 'medium';
-  if (lower.includes('simple') || lower.includes('basic')) complexity = 'low';
-  else if (lower.includes('complex') || lower.includes('advanced') || lower.includes('high-precision')) complexity = 'high';
+  let complexity = detectComplexity(lower);
   
   // Build parameters based on type
   const parameters = buildParameters(type, dimensions, description);
   
   // Detect application
-  let application = 'General purpose';
-  if (lower.includes('high-torque') || lower.includes('heavy-duty')) application = 'High-torque application';
-  else if (lower.includes('precision')) application = 'Precision application';
-  else if (lower.includes('automotive')) application = 'Automotive';
-  else if (lower.includes('aerospace')) application = 'Aerospace';
+  let application = detectApplication(lower);
   
   return {
     type,
@@ -43,6 +27,51 @@ export function parseComponentDescription(description) {
     material,
     application
   };
+}
+
+function detectComponentType(text) {
+  // More comprehensive component type detection
+  if (text.includes('gear')) return 'gear';
+  if (text.includes('shaft') || text.includes('axle')) return 'shaft';
+  if (text.includes('bearing')) return 'bearing';
+  if (text.includes('bracket') || text.includes('mount') || text.includes('support')) return 'bracket';
+  if (text.includes('plate') || text.includes('sheet')) return 'plate';
+  if (text.includes('bolt') || text.includes('screw') || text.includes('fastener')) return 'bolt';
+  if (text.includes('cube') || text.includes('cubic')) return 'cube';
+  if (text.includes('prism') || text.includes('triangular') || text.includes('rectangular')) return 'prism';
+  if (text.includes('cylinder') || text.includes('cylindrical')) return 'cylinder';
+  if (text.includes('sphere') || text.includes('spherical') || text.includes('ball')) return 'sphere';
+  if (text.includes('cone') || text.includes('conical')) return 'cone';
+  if (text.includes('pyramid')) return 'pyramid';
+  
+  // Default to bracket for generic requests
+  return 'bracket';
+}
+
+function detectMaterial(text) {
+  if (text.includes('aluminum') || text.includes('aluminium')) return 'Aluminum';
+  if (text.includes('titanium')) return 'Titanium';
+  if (text.includes('brass')) return 'Brass';
+  if (text.includes('copper')) return 'Copper';
+  if (text.includes('plastic') || text.includes('polymer')) return 'Plastic';
+  if (text.includes('wood')) return 'Wood';
+  return 'Steel'; // Default
+}
+
+function detectComplexity(text) {
+  if (text.includes('simple') || text.includes('basic')) return 'low';
+  if (text.includes('complex') || text.includes('advanced') || text.includes('high-precision') || text.includes('intricate')) return 'high';
+  return 'medium';
+}
+
+function detectApplication(text) {
+  if (text.includes('high-torque') || text.includes('heavy-duty')) return 'High-torque application';
+  if (text.includes('precision')) return 'Precision application';
+  if (text.includes('automotive')) return 'Automotive';
+  if (text.includes('aerospace')) return 'Aerospace';
+  if (text.includes('medical')) return 'Medical device';
+  if (text.includes('3d print') || text.includes('additive')) return '3D Printing';
+  return 'General purpose';
 }
 
 function extractDimensions(text) {
@@ -145,7 +174,45 @@ function buildParameters(type, dimensions, description) {
       params.headHeight = params.radius * 0.8;
       break;
       
+    case 'cube':
+      // For cube, use the first dimension value for all sides
+      const cubeSize = dimensions.allValues[0] || 50;
+      params.size = cubeSize;
+      params.width = cubeSize;
+      params.height = cubeSize;
+      params.depth = cubeSize;
+      break;
+      
+    case 'prism':
+      // For prism, need base dimensions and height
+      params.baseWidth = dimensions.width || dimensions.allValues[0] || 30;
+      params.baseHeight = dimensions.height || dimensions.allValues[1] || 30;
+      params.length = dimensions.length || dimensions.depth || dimensions.allValues[2] || 50;
+      break;
+      
+    case 'cylinder':
+      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
+      params.height = dimensions.length || dimensions.height || dimensions.allValues[1] || 50;
+      break;
+      
+    case 'sphere':
+      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
+      break;
+      
+    case 'cone':
+      params.baseRadius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
+      params.topRadius = dimensions.topDiameter ? dimensions.topDiameter / 2 : 0; // Default to point
+      params.height = dimensions.length || dimensions.height || dimensions.allValues[1] || 50;
+      break;
+      
+    case 'pyramid':
+      params.baseWidth = dimensions.width || dimensions.allValues[0] || 30;
+      params.baseDepth = dimensions.depth || dimensions.allValues[1] || 30;
+      params.height = dimensions.height || dimensions.length || dimensions.allValues[2] || 40;
+      break;
+      
     default:
+      // Generic solid - try to extract 3D dimensions
       params.width = dimensions.width || dimensions.allValues[0] || 50;
       params.height = dimensions.height || dimensions.allValues[1] || 50;
       params.depth = dimensions.depth || dimensions.allValues[2] || 10;

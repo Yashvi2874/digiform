@@ -3,6 +3,54 @@ import { parseComponentDescription } from './nlpParser.js';
 export async function generateDesignFromNL(description) {
   // Use rule-based NLP parser instead of OpenAI
   const design = parseComponentDescription(description);
+  
+  // Add enhanced geometry data from CAD engine
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    
+    // Call enhanced CAD engine for better geometry
+    const pythonProcess = spawn('python', [
+      '-c',
+      `
+import sys
+import json
+sys.path.append('${path.join(__dirname, '')}')
+from enhanced_cad_engine import EnhancedCADEngine
+
+engine = EnhancedCADEngine()
+result = engine.process_description('''${description}''')
+print(json.dumps(result))
+      `
+    ]);
+    
+    let output = '';
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    // Wait for process to complete (simplified approach)
+    await new Promise((resolve) => {
+      pythonProcess.on('close', resolve);
+    });
+    
+    if (output.trim()) {
+      try {
+        const cadResult = JSON.parse(output.trim());
+        if (cadResult.success) {
+          // Merge enhanced geometry with design
+          design.geometry = cadResult.geometry;
+          design.properties = cadResult.properties;
+          design.featureChecklist = cadResult.feature_checklist;
+        }
+      } catch (e) {
+        console.log('Enhanced CAD parsing failed, using basic design');
+      }
+    }
+  } catch (error) {
+    console.log('Enhanced CAD engine failed, using basic design:', error.message);
+  }
+  
   return design;
 }
 

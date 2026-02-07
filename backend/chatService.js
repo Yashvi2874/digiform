@@ -66,19 +66,48 @@ function isQuestion(message) {
 }
 
 function generateDesignProposal(design) {
-  return `I've analyzed your requirements and created a design proposal:
+  // Extract user-defined dimensions
+  const userDimensions = [];
+  if (design.parameters) {
+    Object.entries(design.parameters).forEach(([key, value]) => {
+      if (typeof value === 'number' && value > 0) {
+        userDimensions.push(`• ${key}: ${value}mm`);
+      }
+    });
+  }
+  
+  // Add feature checklist if available
+  let featureInfo = '';
+  if (design.featureChecklist && design.featureChecklist.length > 0) {
+    featureInfo = `\n\n**Features Included:**
+${design.featureChecklist.map(item => `✓ ${item.replace('✓ ', '')}`).join('\n')}`;
+  }
+  
+  // Add properties if available
+  let propertyInfo = '';
+  if (design.properties) {
+    propertyInfo = `\n\n**Engineering Properties:**
+• Volume: ${design.properties.volume} mm³
+• Mass: ${design.properties.mass} g
+• Material: ${design.properties.material}`;
+  }
+  
+  return `I've analyzed your requirements and created a design proposal based on your specifications:
 
 **Component Type:** ${design.type}
 **Material:** ${design.material}
 **Complexity:** ${design.complexity}
 **Application:** ${design.application}
+${userDimensions.length > 0 ? `\n**Your Dimensions:**\n${userDimensions.join('\n')}` : ''}
+${featureInfo}
+${propertyInfo}
 
-**Key Parameters:**
-${Object.entries(design.parameters)
-  .map(([key, value]) => `• ${key}: ${value}${typeof value === 'number' ? 'mm' : ''}`)
-  .join('\n')}
+I've used the exact dimensions you specified. Would you like me to:
+1. **Approve** this design and proceed to 3D visualization
+2. **Modify** any parameters
+3. **Ask questions** about specific aspects
 
-This design should meet your requirements. Would you like me to proceed with this configuration, or would you like to make any changes?`;
+Please confirm your approval or let me know what you'd like to change.`;
 }
 
 function extractModifications(message, currentDesign) {
