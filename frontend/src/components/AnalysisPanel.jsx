@@ -18,6 +18,8 @@ export default function AnalysisPanel() {
   const selectedMaterial = useDesignStore(state => state.selectedMaterial);
   const currentSimulationLoading = useDesignStore(state => state.currentSimulationLoading);
   const currentSimulationType = useDesignStore(state => state.currentSimulationType);
+  const showStressVisualization = useDesignStore(state => state.showStressVisualization);
+  const setShowStressVisualization = useDesignStore(state => state.setShowStressVisualization);
   
   // Get simulation data from current design
   const massProperties = useDesignStore(state => state.currentDesign?.simulationData?.massProperties || null);
@@ -42,10 +44,19 @@ export default function AnalysisPanel() {
   const structuralResultsRef = useRef(null);
 
   // State for inline structural analysis
-  const [showStructuralAnalysis, setShowStructuralAnalysis] = useState(false);
+  const [showStructuralAnalysis, setShowStructuralAnalysis] = useState(() => {
+    // Check if there's a structural analysis in history to auto-open STEP 2
+    const history = currentDesign?.simulationData?.simulationHistory || [];
+    return history.some(sim => sim.type === 'structural');
+  });
   const [structuralLoading, setStructuralLoading] = useState(false);
   const [structuralError, setStructuralError] = useState(null);
-  const [structuralResults, setStructuralResults] = useState(null);
+  const [structuralResults, setStructuralResults] = useState(() => {
+    // Restore latest structural results from history
+    const history = currentDesign?.simulationData?.simulationHistory || [];
+    const latestStructural = history.filter(sim => sim.type === 'structural').pop();
+    return latestStructural?.results || null;
+  });
   
   // Structural analysis inputs
   const [constraintFace, setConstraintFace] = useState('left');
@@ -63,21 +74,29 @@ export default function AnalysisPanel() {
     { value: 'backward', label: '-Z (Backward)', vector: [0, 0, -1] }
   ];
 
-  // Reset structural analysis UI on component mount (page refresh)
+  // Update structural analysis state when design changes
   useEffect(() => {
-    setShowStructuralAnalysis(false);
-    setStructuralResults(null);
-    setStructuralError(null);
-  }, []);
-
-  // Close structural analysis when switching designs or when STEP 1 is not complete
-  useEffect(() => {
-    if (!massPropertiesComputed) {
+    if (currentDesign) {
+      const history = currentDesign.simulationData?.simulationHistory || [];
+      const hasStructural = history.some(sim => sim.type === 'structural');
+      const latestStructural = history.filter(sim => sim.type === 'structural').pop();
+      
+      // Only show structural analysis if there's a history and STEP 1 is complete
+      setShowStructuralAnalysis(hasStructural && massPropertiesComputed);
+      setStructuralResults(latestStructural?.results || null);
+      setStructuralError(null);
+      
+      // Reset stress visualization if no structural analysis exists
+      if (!hasStructural) {
+        setShowStressVisualization(false);
+      }
+    } else {
       setShowStructuralAnalysis(false);
       setStructuralResults(null);
       setStructuralError(null);
+      setShowStressVisualization(false);
     }
-  }, [currentDesign?.id, massPropertiesComputed]);
+  }, [currentDesign?.id, massPropertiesComputed, setShowStressVisualization]);
 
   // Material densities (kg/m³) - MUST match backend exactly
   const materialDensities = {
@@ -223,7 +242,22 @@ export default function AnalysisPanel() {
         addSimulationToHistory({
           type: 'structural',
           material: selectedMaterial,
-          results: data.results
+          results: data.results,
+          constraints: [
+            {
+              type: 'fixed',
+              face: constraintFace,
+              dof: ['x', 'y', 'z']
+            }
+          ],
+          loads: [
+            {
+              type: 'force',
+              magnitude: parseFloat(loadMagnitude),
+              direction: directionVector,
+              face: loadFace
+            }
+          ]
         });
         
         // Auto-scroll to results after a short delay
@@ -483,6 +517,40 @@ export default function AnalysisPanel() {
                       <h4 className="text-lg font-bold text-white">Analysis Results</h4>
                     </div>
 
+                    {/* Stress Visualization Toggle Button */}
+                    <div className="flex items-center justify-between p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                      <div>
+                        <p className="text-sm font-semibold text-purple-300">Visual Stress Heatmap</p>
+                        <p className="text-xs text-purple-200 mt-1">
+                          Display face-wise stress heatmap with semi-transparent overlay on CAD model
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowStressVisualization(!showStressVisualization)}
+                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all whitespace-nowrap ${
+                          showStressVisualization
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                        }`}
+                      >
+                        {showStressVisualization ? '✓ Showing' : 'See Heatmap'}
+                      </button>
+                    </div>
+
+                    {/* 3D Stress Visualization Notice - Only show when enabled */}
+                    {showStressVisualization && (
+                      <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                        <p className="text-sm font-semibold text-purple-300 flex items-center gap-2">
+                          <span>🎨</span>
+                          <span>Stress Heatmap Overlay Active</span>
+                        </p>
+                        <p className="text-xs text-purple-200 mt-1">
+                          Semi-transparent stress colors are overlaid on the CAD model's material. 
+                          Green = Low stress, Yellow = Medium, Orange = High, Red = Critical
+                        </p>
+                      </div>
+                    )}
+
                     {/* Status Badge */}
                     <div className={`inline-block px-4 py-2 rounded-lg font-semibold ${
                       structuralResults.status === 'SAFE' 
@@ -544,6 +612,207 @@ export default function AnalysisPanel() {
                           </div>
                         </div>
                       </div>
+                    )}
+
+                    {/* Stress Heatmap Visualization - Only show when enabled */}
+                    {showStressVisualization && (
+                      <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
+                        <p className="text-sm font-semibold text-gray-200 mb-3">Stress Distribution Heatmap</p>
+                        <p className="text-xs text-gray-400 mb-3">Color-coded stress levels on each surface</p>
+                      
+                      {/* Color Legend */}
+                      <div className="flex items-center gap-2 mb-4 text-xs">
+                        <span className="text-gray-400">Legend:</span>
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 bg-green-500 rounded"></div>
+                          <span className="text-gray-300">Low</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                          <span className="text-gray-300">Medium</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                          <span className="text-gray-300">High</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 bg-red-500 rounded"></div>
+                          <span className="text-gray-300">Critical</span>
+                        </div>
+                      </div>
+
+                      {/* Geometry-Specific Face Stress Grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {(() => {
+                          const designType = currentDesign.type.toLowerCase();
+                          let faces = [];
+                          
+                          // Define faces based on geometry type
+                          if (designType === 'cylinder') {
+                            faces = ['Top Circle', 'Curved Surface', 'Bottom Circle'];
+                          } else if (designType === 'sphere') {
+                            faces = ['Surface'];
+                          } else if (designType === 'cone') {
+                            faces = ['Base Circle', 'Conical Surface', 'Apex'];
+                          } else if (designType === 'cube' || designType === 'beam' || designType === 'bracket' || designType === 'plate') {
+                            faces = ['Top', 'Front', 'Right', 'Bottom', 'Back', 'Left'];
+                          } else {
+                            // Default for other geometries
+                            faces = ['Top', 'Front', 'Right', 'Bottom', 'Back', 'Left'];
+                          }
+                          
+                          return faces.map((face) => {
+                            const maxStress = structuralResults.maxVonMisesStress_MPa;
+                            const yieldStrength = structuralResults.yieldStrength_MPa || 250;
+                            
+                            // Calculate stress ratio for this face
+                            let stressRatio;
+                            const faceLower = face.toLowerCase();
+                            const loadFaceLower = loadFace.toLowerCase();
+                            const constraintFaceLower = constraintFace.toLowerCase();
+                            
+                            // For cylinders, map load/constraint faces to cylinder surfaces
+                            if (designType === 'cylinder') {
+                              if ((loadFaceLower === 'top' && faceLower.includes('top')) ||
+                                  (loadFaceLower === 'bottom' && faceLower.includes('bottom')) ||
+                                  ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                                    loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                                   faceLower.includes('curved'))) {
+                                stressRatio = maxStress / yieldStrength; // Highest stress
+                              } else if ((constraintFaceLower === 'top' && faceLower.includes('top')) ||
+                                         (constraintFaceLower === 'bottom' && faceLower.includes('bottom')) ||
+                                         ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                           constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                          faceLower.includes('curved'))) {
+                                stressRatio = (maxStress * 0.6) / yieldStrength; // Medium stress
+                              } else {
+                                stressRatio = (maxStress * 0.3) / yieldStrength; // Low stress
+                              }
+                            } else if (designType === 'sphere') {
+                              // Sphere has uniform stress distribution
+                              stressRatio = maxStress / yieldStrength;
+                            } else if (designType === 'cone') {
+                              if ((loadFaceLower === 'top' && faceLower.includes('apex')) ||
+                                  (loadFaceLower === 'bottom' && faceLower.includes('base')) ||
+                                  ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                                    loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                                   faceLower.includes('conical'))) {
+                                stressRatio = maxStress / yieldStrength;
+                              } else if ((constraintFaceLower === 'top' && faceLower.includes('apex')) ||
+                                         (constraintFaceLower === 'bottom' && faceLower.includes('base')) ||
+                                         ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                           constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                          faceLower.includes('conical'))) {
+                                stressRatio = (maxStress * 0.6) / yieldStrength;
+                              } else {
+                                stressRatio = (maxStress * 0.3) / yieldStrength;
+                              }
+                            } else {
+                              // Rectangular geometries
+                              if (faceLower === loadFaceLower) {
+                                stressRatio = maxStress / yieldStrength;
+                              } else if (faceLower === constraintFaceLower) {
+                                stressRatio = (maxStress * 0.6) / yieldStrength;
+                              } else {
+                                stressRatio = (maxStress * 0.3) / yieldStrength;
+                              }
+                            }
+                            
+                            // Determine color based on stress ratio
+                            let bgColor, textColor, stressLevel;
+                            if (stressRatio < 0.3) {
+                              bgColor = 'bg-green-500/80';
+                              textColor = 'text-green-100';
+                              stressLevel = 'Low';
+                            } else if (stressRatio < 0.6) {
+                              bgColor = 'bg-yellow-500/80';
+                              textColor = 'text-yellow-100';
+                              stressLevel = 'Medium';
+                            } else if (stressRatio < 0.85) {
+                              bgColor = 'bg-orange-500/80';
+                              textColor = 'text-orange-100';
+                              stressLevel = 'High';
+                            } else {
+                              bgColor = 'bg-red-500/80';
+                              textColor = 'text-red-100';
+                              stressLevel = 'Critical';
+                            }
+                            
+                            const faceStress = stressRatio * yieldStrength;
+                            
+                            // Determine if this face has load or constraint
+                            let hasBorder = false;
+                            let borderColor = 'border-transparent';
+                            
+                            if (designType === 'cylinder') {
+                              if ((loadFaceLower === 'top' && faceLower.includes('top')) ||
+                                  (loadFaceLower === 'bottom' && faceLower.includes('bottom')) ||
+                                  ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                                    loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                                   faceLower.includes('curved'))) {
+                                hasBorder = true;
+                                borderColor = 'border-white';
+                              } else if ((constraintFaceLower === 'top' && faceLower.includes('top')) ||
+                                         (constraintFaceLower === 'bottom' && faceLower.includes('bottom')) ||
+                                         ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                           constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                          faceLower.includes('curved'))) {
+                                hasBorder = true;
+                                borderColor = 'border-gray-400';
+                              }
+                            } else if (designType === 'sphere') {
+                              hasBorder = true;
+                              borderColor = 'border-white';
+                            } else if (designType === 'cone') {
+                              if ((loadFaceLower === 'top' && faceLower.includes('apex')) ||
+                                  (loadFaceLower === 'bottom' && faceLower.includes('base')) ||
+                                  ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                                    loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                                   faceLower.includes('conical'))) {
+                                hasBorder = true;
+                                borderColor = 'border-white';
+                              } else if ((constraintFaceLower === 'top' && faceLower.includes('apex')) ||
+                                         (constraintFaceLower === 'bottom' && faceLower.includes('base')) ||
+                                         ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                           constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                          faceLower.includes('conical'))) {
+                                hasBorder = true;
+                                borderColor = 'border-gray-400';
+                              }
+                            } else {
+                              if (faceLower === loadFaceLower) {
+                                hasBorder = true;
+                                borderColor = 'border-white';
+                              } else if (faceLower === constraintFaceLower) {
+                                hasBorder = true;
+                                borderColor = 'border-gray-400';
+                              }
+                            }
+                            
+                            return (
+                              <div 
+                                key={face}
+                                className={`p-3 ${bgColor} rounded-lg border-2 ${borderColor}`}
+                              >
+                                <div className="flex flex-col items-center">
+                                  <p className={`text-xs font-bold ${textColor} mb-1`}>{face}</p>
+                                  <p className={`text-lg font-bold ${textColor}`}>
+                                    {faceStress.toFixed(1)}
+                                  </p>
+                                  <p className={`text-xs ${textColor}`}>MPa</p>
+                                  <p className={`text-xs ${textColor} mt-1 opacity-80`}>{stressLevel}</p>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                      
+                      <div className="mt-3 text-xs text-gray-400">
+                        <p>• White border: Load application surface (highest stress)</p>
+                        <p>• Gray border: Fixed constraint surface (reaction stress)</p>
+                      </div>
+                    </div>
                     )}
 
                     {/* Assumptions */}

@@ -231,6 +231,10 @@ export const useDesignStore = create(
         showStressVisualization: true
       }),
 
+      setShowStressVisualization: (show) => set({
+        showStressVisualization: show
+      }),
+
       clearStressVisualization: () => set({
         stressResults: null,
         showStressVisualization: false
@@ -266,7 +270,8 @@ export const useDesignStore = create(
         currentDesign: state.currentDesign,
         userId: state.userId,
         selectedMaterial: state.selectedMaterial,
-        densityOverride: state.densityOverride
+        densityOverride: state.densityOverride,
+        showStressVisualization: state.showStressVisualization
       }),
       // Migrate old designs to new structure
       migrate: (persistedState, version) => {

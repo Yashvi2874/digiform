@@ -75,6 +75,7 @@ export function analyzeSimplifiedBeam(params) {
     maxDisplacement_m: maxDeflection,
     maxDisplacement_mm: maxDeflection_mm,
     safetyFactor: safetyFactor,
+    yieldStrength_MPa: yieldStrength / 1e6,
     reactionForces: {
       force_N: reactionForce,
       moment_Nm: reactionMoment
@@ -202,6 +203,7 @@ export function analyzeStructure(params) {
       maxVonMisesStress_MPa: results.maxVonMisesStress_MPa,
       maxDisplacement_mm: results.maxDisplacement_mm,
       safetyFactor: results.safetyFactor,
+      yieldStrength_MPa: results.yieldStrength_MPa,
       status: results.status,
       reactionForces: results.reactionForces,
       stressDistribution: stressDistribution,

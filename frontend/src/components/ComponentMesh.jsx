@@ -125,7 +125,6 @@ function createBracketGeometry(width, height, depth) {
 }
 
 export default function ComponentMesh({ design, autoRotate = true, showCenterLines = false }) {
-  const stressResults = useDesignStore(state => state.stressResults);
   const showStressVisualization = useDesignStore(state => state.showStressVisualization);
   const selectedMaterial = useDesignStore(state => state.selectedMaterial);
   const meshRef = useRef();
@@ -133,12 +132,10 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
   
   // Debug logging
   useEffect(() => {
-    if (showStressVisualization && stressResults) {
-      console.log('ComponentMesh - Stress Results:', stressResults);
-      console.log('ComponentMesh - Safety Factor:', stressResults.safetyFactor);
-      console.log('ComponentMesh - Color:', getStressColor(stressResults.safetyFactor));
+    if (showStressVisualization) {
+      console.log('ComponentMesh - Stress Visualization Enabled');
     }
-  }, [showStressVisualization, stressResults]);
+  }, [showStressVisualization]);
   const centerRef = useRef();
 
   const geometry = useMemo(() => {
@@ -474,10 +471,207 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
 
   const materialProps = getMaterialProperties();
 
+  // Get simulation history to check if structural analysis was run
+  const simulationHistory = useDesignStore(state => state.currentDesign?.simulationData?.simulationHistory || []);
+  const hasStructuralAnalysis = simulationHistory.some(sim => sim.type === 'structural');
+  const latestStructuralAnalysis = simulationHistory.filter(sim => sim.type === 'structural').pop();
+
+  // Apply stress colors to geometry - face-wise coloring
+  const stressColoredGeometry = useMemo(() => {
+    if (!showStressVisualization || !hasStructuralAnalysis || !latestStructuralAnalysis) {
+      return geometry;
+    }
+
+    const clonedGeometry = geometry.clone();
+    const positionAttribute = clonedGeometry.attributes.position;
+    
+    if (!positionAttribute) {
+      return geometry;
+    }
+    
+    const colors = [];
+    
+    const maxStress = latestStructuralAnalysis.results?.maxVonMisesStress_MPa || 0;
+    const yieldStrength = latestStructuralAnalysis.results?.yieldStrength_MPa || 250;
+    
+    // Get design type and parameters
+    const designType = design.type.toLowerCase();
+    const params = design.parameters;
+    
+    // Compute bounding box if not already computed
+    if (!clonedGeometry.boundingBox) {
+      clonedGeometry.computeBoundingBox();
+    }
+    
+    const bbox = clonedGeometry.boundingBox;
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+    
+    // Get load and constraint faces from latest analysis
+    const loadFace = latestStructuralAnalysis.loads?.[0]?.face || 'right';
+    const constraintFace = latestStructuralAnalysis.constraints?.[0]?.face || 'left';
+    
+    // Helper function to determine which face a vertex belongs to
+    const getFaceForVertex = (x, y, z) => {
+      if (designType === 'cylinder') {
+        // For cylinder: check if vertex is on top circle, bottom circle, or curved surface
+        const halfHeight = (params.height || 50) / 2;
+        const tolerance = halfHeight * 0.05; // 5% tolerance
+        
+        if (Math.abs(z - halfHeight) < tolerance) return 'top';
+        if (Math.abs(z + halfHeight) < tolerance) return 'bottom';
+        return 'curved';
+      } else if (designType === 'sphere') {
+        return 'surface';
+      } else if (designType === 'cone') {
+        const halfHeight = (params.height || 50) / 2;
+        const tolerance = halfHeight * 0.05; // 5% tolerance
+        
+        if (Math.abs(z + halfHeight) < tolerance) return 'base';
+        if (Math.abs(z - halfHeight) < tolerance) return 'apex';
+        return 'conical';
+      } else {
+        // For box-like geometries (cube, beam, bracket, plate)
+        // Use a more precise method based on distance to bounding box faces
+        const tolerance = 0.5; // Tolerance for face detection
+        
+        // Calculate distances to each face of the bounding box
+        const distToRight = Math.abs(x - bbox.max.x);
+        const distToLeft = Math.abs(x - bbox.min.x);
+        const distToTop = Math.abs(y - bbox.max.y);
+        const distToBottom = Math.abs(y - bbox.min.y);
+        const distToFront = Math.abs(z - bbox.max.z);
+        const distToBack = Math.abs(z - bbox.min.z);
+        
+        // Find the minimum distance
+        const minDist = Math.min(distToRight, distToLeft, distToTop, distToBottom, distToFront, distToBack);
+        
+        // Assign face based on minimum distance
+        if (minDist === distToRight && distToRight < tolerance) return 'right';
+        if (minDist === distToLeft && distToLeft < tolerance) return 'left';
+        if (minDist === distToTop && distToTop < tolerance) return 'top';
+        if (minDist === distToBottom && distToBottom < tolerance) return 'bottom';
+        if (minDist === distToFront && distToFront < tolerance) return 'front';
+        if (minDist === distToBack && distToBack < tolerance) return 'back';
+        
+        // Fallback for vertices not on a face (shouldn't happen for box geometry)
+        if (distToRight < distToLeft) {
+          return distToTop < distToBottom ? 'right' : 'right';
+        } else {
+          return distToTop < distToBottom ? 'left' : 'left';
+        }
+      }
+    };
+    
+    // Helper function to get stress ratio for a face
+    const getStressRatioForFace = (face) => {
+      const faceLower = face.toLowerCase();
+      const loadFaceLower = loadFace.toLowerCase();
+      const constraintFaceLower = constraintFace.toLowerCase();
+      
+      // Map load/constraint faces to cylinder surfaces
+      if (designType === 'cylinder') {
+        const isLoadFace = (loadFaceLower === 'top' && faceLower === 'top') ||
+                          (loadFaceLower === 'bottom' && faceLower === 'bottom') ||
+                          ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                            loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                           faceLower === 'curved');
+        
+        const isConstraintFace = (constraintFaceLower === 'top' && faceLower === 'top') ||
+                                (constraintFaceLower === 'bottom' && faceLower === 'bottom') ||
+                                ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                  constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                 faceLower === 'curved');
+        
+        if (isLoadFace) return maxStress / yieldStrength;
+        if (isConstraintFace) return (maxStress * 0.6) / yieldStrength;
+        return (maxStress * 0.3) / yieldStrength;
+      } else if (designType === 'sphere') {
+        return maxStress / yieldStrength;
+      } else if (designType === 'cone') {
+        const isLoadFace = (loadFaceLower === 'top' && faceLower === 'apex') ||
+                          (loadFaceLower === 'bottom' && faceLower === 'base') ||
+                          ((loadFaceLower === 'left' || loadFaceLower === 'right' || 
+                            loadFaceLower === 'front' || loadFaceLower === 'back') && 
+                           faceLower === 'conical');
+        
+        const isConstraintFace = (constraintFaceLower === 'top' && faceLower === 'apex') ||
+                                (constraintFaceLower === 'bottom' && faceLower === 'base') ||
+                                ((constraintFaceLower === 'left' || constraintFaceLower === 'right' || 
+                                  constraintFaceLower === 'front' || constraintFaceLower === 'back') && 
+                                 faceLower === 'conical');
+        
+        if (isLoadFace) return maxStress / yieldStrength;
+        if (isConstraintFace) return (maxStress * 0.6) / yieldStrength;
+        return (maxStress * 0.3) / yieldStrength;
+      } else {
+        // Rectangular geometries
+        if (faceLower === loadFaceLower) return maxStress / yieldStrength;
+        if (faceLower === constraintFaceLower) return (maxStress * 0.6) / yieldStrength;
+        return (maxStress * 0.3) / yieldStrength;
+      }
+    };
+    
+    // Helper function to get color from stress ratio
+    const getColorFromStressRatio = (stressRatio) => {
+      if (stressRatio < 0.3) {
+        return new THREE.Color(0x00ff00); // Bright Green - Low stress
+      } else if (stressRatio < 0.6) {
+        return new THREE.Color(0xffff00); // Bright Yellow - Medium stress
+      } else if (stressRatio < 0.85) {
+        return new THREE.Color(0xff8800); // Bright Orange - High stress
+      } else {
+        return new THREE.Color(0xff0000); // Bright Red - Critical stress
+      }
+    };
+    
+    // Apply colors to each vertex based on which face it belongs to
+    const faceCount = {};
+    const faceStressRatios = {};
+    
+    for (let i = 0; i < positionAttribute.count; i++) {
+      const x = positionAttribute.getX(i);
+      const y = positionAttribute.getY(i);
+      const z = positionAttribute.getZ(i);
+      
+      // Determine which face this vertex belongs to
+      const face = getFaceForVertex(x, y, z);
+      
+      // Count faces for debugging
+      faceCount[face] = (faceCount[face] || 0) + 1;
+      
+      // Get stress ratio for this face
+      const stressRatio = getStressRatioForFace(face);
+      
+      // Store stress ratio for this face
+      if (!faceStressRatios[face]) {
+        faceStressRatios[face] = stressRatio;
+      }
+      
+      // Get color based on stress ratio
+      const color = getColorFromStressRatio(stressRatio);
+      
+      colors.push(color.r, color.g, color.b);
+    }
+    
+    console.log('=== STRESS VISUALIZATION DEBUG ===');
+    console.log('Design type:', designType);
+    console.log('Face-wise vertex distribution:', faceCount);
+    console.log('Face-wise stress ratios:', faceStressRatios);
+    console.log('Load face:', loadFace, '| Constraint face:', constraintFace);
+    console.log('Max stress:', maxStress, 'MPa | Yield strength:', yieldStrength, 'MPa');
+    
+    clonedGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    
+    return clonedGeometry;
+  }, [geometry, showStressVisualization, hasStructuralAnalysis, latestStructuralAnalysis, design]);
+
+  const shouldShowStressColors = showStressVisualization && hasStructuralAnalysis;
+
   return (
     <group>
+      {/* Main CAD mesh with original material */}
       <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-        {/* Material color and properties based on selected material */}
         <meshStandardMaterial 
           color={getMaterialColor()}
           metalness={materialProps.metalness} 
@@ -485,6 +679,28 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
           envMapIntensity={1}
         />
       </mesh>
+      
+      {/* Semi-transparent stress heatmap overlay - only when visualization is enabled */}
+      {shouldShowStressColors && (
+        <mesh 
+          geometry={stressColoredGeometry} 
+          castShadow={false} 
+          receiveShadow={false}
+          scale={[1.002, 1.002, 1.002]}
+        >
+          <meshStandardMaterial 
+            vertexColors={true}
+            transparent={true}
+            opacity={0.75}
+            metalness={0.0}
+            roughness={0.8}
+            emissive="#ffffff"
+            emissiveIntensity={0.3}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
       
       {/* Dotted Center Axis Lines - Aligned to model center */}
       {centerLines}
