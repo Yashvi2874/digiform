@@ -2,6 +2,9 @@
   "name": "digiform-frontend",
   "version": "1.0.0",
   "description": "DigiForm Frontend - Where Ideas Take Shape",
+  "author": "DigiForm Team",
+  "license": "PROPRIETARY",
+  "copyright": "Copyright © 2024 DigiForm. All Rights Reserved.",
   "type": "module",
   "scripts": {
     "dev": "vite",

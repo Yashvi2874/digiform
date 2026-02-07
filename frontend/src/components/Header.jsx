@@ -21,6 +21,9 @@ export default function Header({ activeTab, setActiveTab, user, onLogout }) {
           <p className="text-[10px] md:text-xs text-gray-400 tracking-widest uppercase font-medium hidden sm:block">
             Where Ideas Take Shape
           </p>
+          <p className="text-[8px] md:text-[9px] text-gray-500 hidden sm:block">
+            © 2024 DigiForm. All Rights Reserved.
+          </p>
         </div>
       </div>
       

@@ -70,6 +70,7 @@ export default function AuthPage({ onLogin }) {
             DIGIFORM
           </h1>
           <p className="text-gray-400 text-sm">WHERE IDEAS TAKE SHAPE</p>
+          <p className="text-gray-600 text-xs mt-2">© 2024 DigiForm. All Rights Reserved.</p>
         </div>
 
         {/* Auth Form */}

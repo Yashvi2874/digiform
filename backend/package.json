@@ -2,6 +2,9 @@
   "name": "digiform-backend",
   "version": "1.0.0",
   "description": "DigiForm Backend API",
+  "author": "DigiForm Team",
+  "license": "PROPRIETARY",
+  "copyright": "Copyright © 2024 DigiForm. All Rights Reserved.",
   "type": "module",
   "main": "index.js",
   "scripts": {

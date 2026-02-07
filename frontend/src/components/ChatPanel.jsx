@@ -440,6 +440,9 @@ export default function ChatPanel() {
         <p className="text-[10px] md:text-xs text-gray-500 mt-2 text-center">
           💡 Try: "Design a gear with 20 teeth" or "Make it aluminum"
         </p>
+        <p className="text-[8px] md:text-[9px] text-gray-600 mt-1 text-center">
+          © 2024 DigiForm. All Rights Reserved.
+        </p>
       </div>
 
       {/* Chat History Sidebar */}

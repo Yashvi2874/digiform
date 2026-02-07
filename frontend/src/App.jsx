@@ -1,3 +1,12 @@
+/**
+ * DigiForm - Main Application Component
+ * 
+ * © 2024 DigiForm. All Rights Reserved.
+ * 
+ * This software is proprietary and confidential.
+ * Unauthorized copying, modification, distribution, or use is strictly prohibited.
+ */
+
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import ChatPanel from './components/ChatPanel';

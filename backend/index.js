@@ -1,3 +1,12 @@
+/**
+ * DigiForm Backend Server
+ * 
+ * © 2024 DigiForm. All Rights Reserved.
+ * 
+ * This software is proprietary and confidential.
+ * Unauthorized copying, modification, distribution, or use is strictly prohibited.
+ */
+
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';

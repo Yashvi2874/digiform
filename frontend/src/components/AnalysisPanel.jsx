@@ -43,6 +43,9 @@ export default function AnalysisPanel() {
   // Ref for auto-scrolling to structural results
   const structuralResultsRef = useRef(null);
 
+  // Ref for auto-scrolling to stress distribution
+  const stressDistributionRef = useRef(null);
+
   // State for inline structural analysis
   const [showStructuralAnalysis, setShowStructuralAnalysis] = useState(() => {
     // Check if there's a structural analysis in history to auto-open STEP 2
@@ -191,6 +194,36 @@ export default function AnalysisPanel() {
       });
     }
   }, [showStructuralAnalysis]);
+
+  // Auto-scroll to stress distribution when visualization is enabled
+  useEffect(() => {
+    if (showStressVisualization && stressDistributionRef.current) {
+      // Smooth scroll to the stress distribution section with a slight delay
+      setTimeout(() => {
+        // Get the scrollable parent container
+        const scrollContainer = stressDistributionRef.current.closest('.overflow-y-auto');
+        
+        if (scrollContainer) {
+          // Scroll the container to show the stress distribution panel
+          const elementTop = stressDistributionRef.current.offsetTop;
+          const elementHeight = stressDistributionRef.current.offsetHeight;
+          const containerHeight = scrollContainer.clientHeight;
+          
+          // Scroll to position the element near the top of the visible area
+          scrollContainer.scrollTo({
+            top: elementTop - 20, // 20px padding from top
+            behavior: 'smooth'
+          });
+        } else {
+          // Fallback to standard scrollIntoView
+          stressDistributionRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start'
+          });
+        }
+      }, 300);
+    }
+  }, [showStressVisualization]);
 
   const runStructuralAnalysis = async () => {
     setStructuralLoading(true);
@@ -616,7 +649,10 @@ export default function AnalysisPanel() {
 
                     {/* Stress Heatmap Visualization - Only show when enabled */}
                     {showStressVisualization && (
-                      <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
+                      <div 
+                        ref={stressDistributionRef}
+                        className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg"
+                      >
                         <p className="text-sm font-semibold text-gray-200 mb-3">Mechanical Stress Distribution</p>
                         <p className="text-xs text-gray-400 mb-3">Color-coded stress levels on each surface</p>
                       
@@ -837,6 +873,13 @@ export default function AnalysisPanel() {
           <p className="text-gray-400">Create a CAD design to begin simulations</p>
         </div>
       )}
+
+      {/* Copyright Footer */}
+      <div className="mt-6 pt-4 border-t border-gray-700/50 text-center">
+        <p className="text-[9px] md:text-[10px] text-gray-600">
+          © 2024 DigiForm. All Rights Reserved.
+        </p>
+      </div>
     </div>
   );
 }
