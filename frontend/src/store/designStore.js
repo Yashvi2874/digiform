@@ -22,6 +22,19 @@ export const useDesignStore = create((set) => ({
       : state.currentDesign
   })),
 
+  removeDesign: (id) => set((state) => {
+    const newDesigns = state.designs.filter(d => d.id !== id);
+    const wasCurrentDesign = state.currentDesign?.id === id;
+    
+    return {
+      designs: newDesigns,
+      // If we deleted the current design, set the most recent one as current
+      currentDesign: wasCurrentDesign 
+        ? (newDesigns.length > 0 ? newDesigns[newDesigns.length - 1] : null)
+        : state.currentDesign
+    };
+  }),
+
   clearDesigns: () => set({
     designs: [],
     currentDesign: null
