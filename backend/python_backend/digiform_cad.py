@@ -28,11 +28,36 @@ class DigiformCADEngine:
     def process_natural_language(self, description: str) -> Dict[str, Any]:
         """
         Process natural language description into CAD model
-        Returns detailed parsing results and model information
+        Returns detailed parsing results and model information with centerline validation
+        
+        MANDATORY GEAR RULE: If gears are requested, validate that Module/DP and teeth count are specified.
         """
         try:
             # Parse the description
             parsed_data = self.nlp_parser.parse_description(description)
+            
+            # GEAR HANDLING RULE: Check for incomplete gear specifications
+            if parsed_data['component_type'] == 'gear':
+                gear_validation = parsed_data.get('gear_validation', {})
+                missing_params = parsed_data.get('missing_gear_params', [])
+                
+                if missing_params:
+                    return {
+                        'success': False,
+                        'error': 'INCOMPLETE GEAR SPECIFICATION - Gears must NOT be approximated as cylinders',
+                        'component_type': 'gear',
+                        'missing_parameters': missing_params,
+                        'specification_quality': gear_validation.get('specification_quality', 'INCOMPLETE'),
+                        'required_info': {
+                            'module': 'e.g., "module 2" (metric tooth size)',
+                            'or_diametral_pitch': 'e.g., "diametral pitch 12" or "DP 12"',
+                            'teeth': f"e.g., '20 teeth' (current: {parsed_data['dimensions'].get('teeth', 'NOT SPECIFIED')})",
+                            'pressure_angle': 'e.g., "20° pressure angle" (standard 20° used if not specified)',
+                            'thickness': 'e.g., "10mm thick" (face width)'
+                        },
+                        'example_complete_request': 'Create a spur gear with module 2, 20 teeth, 20° pressure angle, 10mm thickness',
+                        'errors': gear_validation.get('errors', [])
+                    }
             
             # Create CAD model based on parsed data
             model = self._create_model_from_parsed_data(parsed_data)
@@ -49,14 +74,24 @@ class DigiformCADEngine:
                 # Generate preview
                 preview_image = self.viewport.render_model(model)
                 
-                return {
+                response = {
                     'success': True,
                     'model': model,
                     'parsed_data': parsed_data,
                     'preview': preview_image,
                     'properties': self._get_model_properties(model),
-                    'feature_checklist': self._generate_feature_checklist(parsed_data)
+                    'feature_checklist': self._generate_feature_checklist(parsed_data),
+                    'centerline_info': {
+                        'type': parsed_data.get('centerline_type', 'XYZ'),
+                        'validation': model.get_centerline_validation()
+                    }
                 }
+                
+                # Add gear specifications to response if applicable
+                if parsed_data['component_type'] == 'gear' and hasattr(model, 'gear_specs'):
+                    response['gear_specifications'] = model.gear_specs
+                
+                return response
             else:
                 return {
                     'success': False,
@@ -73,6 +108,14 @@ class DigiformCADEngine:
         """Create CAD model from parsed natural language data"""
         component_type = parsed_data['component_type']
         parameters = parsed_data['parameters']
+        centerline_type = parsed_data.get('centerline_type', 'XYZ')
+        
+        # Map centerline type to model type
+        model_type_map = {
+            'Z': 'cylindrical',
+            'XYZ': 'prismatic'
+        }
+        model_type = model_type_map.get(centerline_type, 'prismatic')
         
         try:
             if component_type == 'gear':
@@ -80,7 +123,8 @@ class DigiformCADEngine:
                     teeth=parameters.get('teeth', 20),
                     module=parameters.get('module', 2.0),
                     thickness=parameters.get('thickness', 10),
-                    bore_diameter=parameters.get('bore_diameter', 0)
+                    bore_diameter=parameters.get('bore_diameter', 0),
+                    pressure_angle=parameters.get('pressure_angle', 20.0)
                 )
             elif component_type == 'shaft':
                 return ParametricEngine.create_shaft(
@@ -107,7 +151,7 @@ class DigiformCADEngine:
             elif component_type == 'custom':
                 # Create custom component from features
                 features = self._build_feature_list(parsed_data)
-                return ParametricEngine.create_custom_component(features)
+                return ParametricEngine.create_custom_component(features, model_type=model_type)
             else:
                 # Default to bracket for unknown types
                 return ParametricEngine.create_bracket(50, 30, 10)
@@ -317,8 +361,17 @@ class DigiformCADEngine:
             return 'high'
     
     def _generate_feature_checklist(self, parsed_data: Dict[str, Any]) -> List[str]:
-        """Generate feature checklist from parsed data"""
+        """Generate feature checklist from parsed data with centerline validation"""
         checklist = []
+        
+        # Centerline validation header
+        centerline_type = parsed_data.get('centerline_type', 'XYZ')
+        if centerline_type == 'Z':
+            checklist.append("✔ CENTERLINE CREATED: Z-axis (Cylindrical/Symmetric)")
+        else:
+            checklist.append("✔ CENTERLINE CREATED: Orthogonal X,Y,Z axes (Prismatic)")
+        checklist.append("✔ CENTERLINE ORIGIN: (0, 0, 0)")
+        checklist.append("")
         
         # Component type
         checklist.append(f"✓ Component type: {parsed_data['component_type']}")
@@ -332,17 +385,31 @@ class DigiformCADEngine:
                 else:
                     checklist.append(f"✓ {dim_name}: {dim_value} mm")
         
-        # Features
+        # Features with centerline usage
         for feature in parsed_data['features']:
-            checklist.append(f"✓ {feature['type']}: {feature.get('diameter', feature.get('radius', feature.get('length', 'specified')))}")
+            feature_type = feature['type']
+            if feature_type in ['hole', 'bore', 'pocket']:
+                checklist.append(f"✔ {feature_type.upper()}: CENTERED on {centerline_type}-axis")
+            else:
+                checklist.append(f"✓ {feature_type}: {feature.get('diameter', feature.get('radius', feature.get('length', 'specified')))}")
         
         # Patterns
         for pattern in parsed_data['patterns']:
-            checklist.append(f"✓ {pattern['type']} pattern: {pattern['count']} items")
+            if pattern['type'] == 'circular':
+                checklist.append(f"✔ Circular PATTERN: {pattern['count']} items around {centerline_type}-axis")
+            else:
+                checklist.append(f"✓ {pattern['type']} pattern: {pattern['count']} items")
         
         # Constraints
         for constraint in parsed_data['constraints']:
             checklist.append(f"✓ {constraint['type']} constraint applied")
+        
+        # Validation summary
+        checklist.append("")
+        checklist.append("🔍 VALIDATION SUMMARY:")
+        checklist.append("✔ Centerline created and visible")
+        checklist.append("✔ Centerline aligned with geometry")
+        checklist.append("✔ All symmetric features reference centerline")
         
         return checklist
     

@@ -41,11 +41,29 @@ class EnhancedNLPParser:
             'offset': re.compile(r'\b(offset|from edge|from center|distance)\b', re.IGNORECASE),
             'aligned': re.compile(r'\b(aligned|parallel|perpendicular)\b', re.IGNORECASE),
         }
+        
+        # Centerline/axis patterns
+        self.centerline_patterns = {
+            'cylindrical': re.compile(r'\b(cylinder|cylindrical|round|shaft|axle|drill)\b', re.IGNORECASE),
+            'symmetric': re.compile(r'\b(symmetric|symmetrical|centered|circular pattern)\b', re.IGNORECASE),
+            'revolve': re.compile(r'\b(revolve|revolving|rotational|rotation)\b', re.IGNORECASE),
+            'bore': re.compile(r'\b(bore|inner|hole|drill)\b', re.IGNORECASE),
+        }
+        
+        # Gear-specific patterns (MANDATORY RULE)
+        self.gear_patterns = {
+            'module': re.compile(r'module\s*(?:=\s*)?(\d+\.?\d*)', re.IGNORECASE),
+            'diametral_pitch': re.compile(r'(?:diametral\s*pitch|dp|diametral\s+pitch)\s*(?:=\s*)?(\d+\.?\d*)', re.IGNORECASE),
+            'pressure_angle': re.compile(r'(?:pressure\s*angle|pressure\s+angle)\s*(?:=\s*)?(\d+\.?\d*)\s*(?:°|degree|deg)?', re.IGNORECASE),
+            'teeth': re.compile(r'(\d+)\s*(?:teeth|tooth|t\b)', re.IGNORECASE),
+        }
     
     def parse_description(self, description: str) -> Dict[str, Any]:
         """Parse natural language description into CAD features"""
+        component_type = self._detect_component_type(description)
+        
         result = {
-            'component_type': self._detect_component_type(description),
+            'component_type': component_type,
             'base_features': [],
             'modifiers': [],
             'dimensions': self._extract_dimensions(description),
@@ -53,13 +71,35 @@ class EnhancedNLPParser:
             'patterns': self._extract_patterns(description),
             'constraints': self._extract_constraints(description),
             'material': self._extract_material(description),
+            'centerline_type': self._detect_centerline_type(description),
             'parameters': {}
         }
+        
+        # GEAR HANDLING RULE: Validate gear parameters are properly specified
+        if component_type == 'gear':
+            gear_validation = self._validate_gear_parameters(description, result['dimensions'])
+            result['gear_validation'] = gear_validation
+            result['missing_gear_params'] = gear_validation['missing_parameters']
         
         # Build parameters based on extracted information
         result['parameters'] = self._build_parameters(result)
         
         return result
+    
+    def _detect_centerline_type(self, text: str) -> str:
+        """Detect required centerline type (Z-axis or XYZ orthogonal)"""
+        text_lower = text.lower()
+        
+        # Check for cylindrical/symmetric patterns
+        is_cylindrical = any(self.centerline_patterns['cylindrical'].search(text_lower) for _ in [None])
+        is_symmetric = any(self.centerline_patterns['symmetric'].search(text_lower) for _ in [None])
+        is_revolve = any(self.centerline_patterns['revolve'].search(text_lower) for _ in [None])
+        has_bore = self.centerline_patterns['bore'].search(text_lower)
+        
+        if is_cylindrical or is_symmetric or is_revolve or has_bore:
+            return 'Z'  # Single Z-axis for cylindrical/symmetric
+        else:
+            return 'XYZ'  # Orthogonal axes for prismatic parts
     
     def _detect_component_type(self, text: str) -> str:
         """Detect the main component type"""
@@ -81,6 +121,78 @@ class EnhancedNLPParser:
             return 'housing'
         else:
             return 'custom'
+    
+    def _validate_gear_parameters(self, description: str, dimensions: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        MANDATORY RULE: Validate that gear specifications include all required parameters.
+        Gears MUST NOT be approximated as cylinders.
+        
+        Required parameters:
+        - Module or Diametral Pitch (for tooth size)
+        - Number of Teeth
+        - Pressure Angle (for involute profile)
+        """
+        validation = {
+            'is_gear': True,
+            'has_module': False,
+            'has_diametral_pitch': False,
+            'has_teeth': False,
+            'has_pressure_angle': False,
+            'missing_parameters': [],
+            'specification_quality': 'INCOMPLETE',
+            'errors': []
+        }
+        
+        # Check for module
+        module_match = self.gear_patterns['module'].search(description)
+        if module_match:
+            validation['has_module'] = True
+            dimensions['module'] = float(module_match.group(1))
+        
+        # Check for diametral pitch
+        dp_match = self.gear_patterns['diametral_pitch'].search(description)
+        if dp_match:
+            validation['has_diametral_pitch'] = True
+            # Convert diametral pitch to module: module = 25.4 / DP
+            dp_value = float(dp_match.group(1))
+            dimensions['module'] = 25.4 / dp_value
+            dimensions['diametral_pitch'] = dp_value
+        
+        # Check for teeth
+        teeth_match = self.gear_patterns['teeth'].search(description)
+        if teeth_match:
+            validation['has_teeth'] = True
+            teeth_value = int(teeth_match.group(1))
+            if teeth_value < 10:
+                validation['errors'].append('WARNING: Gear with less than 10 teeth may have undercutting')
+            if teeth_value > 500:
+                validation['errors'].append('WARNING: Gear with more than 500 teeth is unusual')
+            dimensions['teeth'] = teeth_value
+        else:
+            validation['missing_parameters'].append('Number of teeth (e.g., "20 teeth")')
+        
+        # Check for pressure angle (if not specified, default to 20°)
+        pa_match = self.gear_patterns['pressure_angle'].search(description)
+        if pa_match:
+            validation['has_pressure_angle'] = True
+            dimensions['pressure_angle'] = float(pa_match.group(1))
+        else:
+            validation['has_pressure_angle'] = True  # Default is acceptable
+            dimensions['pressure_angle'] = 20.0  # Standard 20° pressure angle
+        
+        # At least one of module or diametral pitch is required
+        if not (validation['has_module'] or validation['has_diametral_pitch']):
+            validation['missing_parameters'].append('Module (e.g., "module 2") OR Diametral Pitch (e.g., "DP 12")')
+        
+        # Determine overall quality
+        if validation['missing_parameters']:
+            validation['specification_quality'] = 'INCOMPLETE'
+        elif validation['has_module'] and validation['has_teeth'] and validation['has_pressure_angle']:
+            validation['specification_quality'] = 'COMPLETE'
+        else:
+            validation['specification_quality'] = 'ACCEPTABLE'
+        
+        return validation
     
     def _extract_dimensions(self, text: str) -> Dict[str, float]:
         """Extract all dimensions from text"""

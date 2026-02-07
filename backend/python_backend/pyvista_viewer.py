@@ -30,9 +30,9 @@ class PyVistaRenderer:
             self.plotter.set_background('white')
             
     def render_cad_model(self, model: Any, color: str = 'lightblue', 
-                        show_edges: bool = True) -> str:
+                        show_edges: bool = True, show_centerline: bool = True) -> str:
         """
-        Render a CAD model and return base64 encoded image
+        Render a CAD model with optional centerline and return base64 encoded image
         """
         self.setup_plotter()
         
@@ -53,6 +53,10 @@ class PyVistaRenderer:
                     line_width=1
                 )
                 
+                # Add centerline if available
+                if show_centerline and hasattr(model, 'centerline'):
+                    self._render_centerline(model.centerline, mesh)
+                
                 # Set up camera for isometric view
                 self._setup_camera(mesh)
                 
@@ -72,6 +76,52 @@ class PyVistaRenderer:
             return self._get_error_image()
         
         return self._get_error_image()
+    
+    def _render_centerline(self, centerline: Any, mesh: pv.PolyData):
+        """Render centerline/reference axes on the model"""
+        try:
+            axes_data = centerline.get_axes_data()
+            
+            for axis_name, axis_info in axes_data.items():
+                start = np.array(axis_info['start'])
+                end = np.array(axis_info['end'])
+                color = axis_info.get('color', 'red')
+                style = axis_info.get('style', 'solid')
+                
+                # Create line
+                line = pv.Line(start, end)
+                
+                # Add line to plotter with style
+                if style == 'dashed':
+                    # Dashed line representation
+                    self.plotter.add_mesh(
+                        line,
+                        color=color,
+                        line_width=2,
+                        label=f'{axis_name}-axis (centerline)',
+                        render_lines_as_tubes=True
+                    )
+                else:
+                    # Solid line
+                    self.plotter.add_mesh(
+                        line,
+                        color=color,
+                        line_width=1.5,
+                        label=f'{axis_name}-axis',
+                        render_lines_as_tubes=False
+                    )
+                
+                # Add small sphere at origin
+                origin_sphere = pv.Sphere(radius=2, center=(0, 0, 0))
+                self.plotter.add_mesh(
+                    origin_sphere,
+                    color='black',
+                    opacity=0.8,
+                    label='Origin (0, 0, 0)'
+                )
+                
+        except Exception as e:
+            print(f"Error rendering centerline: {e}")
     
     def _cad_to_mesh(self, model: Any) -> Optional[pv.PolyData]:
         """Convert CAD model to PyVista mesh"""
