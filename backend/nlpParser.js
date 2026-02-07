@@ -77,35 +77,82 @@ function detectApplication(text) {
 function extractDimensions(text) {
   const dimensions = {};
   
-  // Match patterns like "50mm", "50 mm", "2.5cm", "100x50mm"
-  const mmPattern = /(\d+\.?\d*)\s*mm/gi;
-  const cmPattern = /(\d+\.?\d*)\s*cm/gi;
-  const inchPattern = /(\d+\.?\d*)\s*(?:inch|in|")/gi;
-  const dimensionPattern = /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(?:x\s*(\d+\.?\d*))?\s*mm/gi;
+  // Check for hollow/tube keyword
+  dimensions.isHollow = /hollow|tube|pipe|tubular/i.test(text);
   
-  // Extract all mm values
+  // Extract wall thickness for hollow objects
+  const wallThicknessMatch = /(?:wall\s*)?(?:thickness|thick)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (wallThicknessMatch) {
+    let value = parseFloat(wallThicknessMatch[1]);
+    const unit = wallThicknessMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10;
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4;
+    }
+    
+    dimensions.wallThickness = value;
+  }
+  
+  // Extract all values with units first
+  const mmPattern = /(\d+\.?\d*)\s*(?:mm|millimeter)/gi;
+  const cmPattern = /(\d+\.?\d*)\s*(?:cm|centimeter)/gi;
+  const inchPattern = /(\d+\.?\d*)\s*(?:inch|in|")/gi;
+  
   let match;
-  const mmValues = [];
+  const allValues = [];
+  
+  // Extract mm values
+  mmPattern.lastIndex = 0;
   while ((match = mmPattern.exec(text)) !== null) {
-    mmValues.push(parseFloat(match[1]));
+    allValues.push({ 
+      value: parseFloat(match[1]), 
+      index: match.index,
+      unit: 'mm'
+    });
   }
   
   // Extract cm values and convert to mm
+  cmPattern.lastIndex = 0;
   while ((match = cmPattern.exec(text)) !== null) {
-    mmValues.push(parseFloat(match[1]) * 10);
+    allValues.push({ 
+      value: parseFloat(match[1]) * 10, 
+      index: match.index,
+      unit: 'cm',
+      originalValue: parseFloat(match[1])
+    });
   }
   
   // Extract inch values and convert to mm
+  inchPattern.lastIndex = 0;
   while ((match = inchPattern.exec(text)) !== null) {
-    mmValues.push(parseFloat(match[1]) * 25.4);
+    allValues.push({ 
+      value: parseFloat(match[1]) * 25.4, 
+      index: match.index,
+      unit: 'inch',
+      originalValue: parseFloat(match[1])
+    });
   }
   
-  // Check for dimension patterns (WxHxD)
+  // Sort by index to maintain order
+  allValues.sort((a, b) => a.index - b.index);
+  dimensions.allValues = allValues.map(v => v.value);
+  dimensions.allMatches = allValues;
+  
+  // Check for dimension patterns (WxHxD or W by H)
+  const dimensionPattern = /(\d+\.?\d*)\s*(?:cm|mm)?\s*(?:x|by)\s*(\d+\.?\d*)\s*(?:cm|mm)?\s*(?:(?:x|by)\s*(\d+\.?\d*)\s*(?:cm|mm)?)?/gi;
+  dimensionPattern.lastIndex = 0;
   const dimMatch = dimensionPattern.exec(text);
   if (dimMatch) {
-    dimensions.width = parseFloat(dimMatch[1]);
-    dimensions.height = parseFloat(dimMatch[2]);
-    if (dimMatch[3]) dimensions.depth = parseFloat(dimMatch[3]);
+    // Check if units are specified
+    const hasUnit = /(?:cm|mm)/.test(dimMatch[0]);
+    const isCm = /cm/.test(dimMatch[0]);
+    const multiplier = isCm ? 10 : 1;
+    
+    dimensions.width = parseFloat(dimMatch[1]) * multiplier;
+    dimensions.height = parseFloat(dimMatch[2]) * multiplier;
+    if (dimMatch[3]) dimensions.depth = parseFloat(dimMatch[3]) * multiplier;
   }
   
   // Extract teeth count for gears
@@ -114,26 +161,95 @@ function extractDimensions(text) {
     dimensions.teeth = parseInt(teethMatch[1]);
   }
   
-  // Extract diameter
-  const diameterMatch = /(?:diameter|dia\.?|d)\s*(?:of\s*)?(\d+\.?\d*)\s*mm/i.exec(text);
+  // Extract RADIUS with unit support
+  const radiusMatch = /(?:radius|r)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (radiusMatch) {
+    let value = parseFloat(radiusMatch[1]);
+    const unit = radiusMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10; // Convert cm to mm
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4; // Convert inch to mm
+    }
+    
+    dimensions.radius = value;
+  }
+  
+  // Extract DIAMETER with unit support
+  const diameterMatch = /(?:diameter|dia\.?|d|ø)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
   if (diameterMatch) {
-    dimensions.diameter = parseFloat(diameterMatch[1]);
+    let value = parseFloat(diameterMatch[1]);
+    const unit = diameterMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10; // Convert cm to mm
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4; // Convert inch to mm
+    }
+    
+    dimensions.diameter = value;
   }
   
-  // Extract length
-  const lengthMatch = /(?:length|long)\s*(?:of\s*)?(\d+\.?\d*)\s*mm/i.exec(text);
+  // Extract LENGTH with unit support
+  const lengthMatch = /(?:length|long)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
   if (lengthMatch) {
-    dimensions.length = parseFloat(lengthMatch[1]);
+    let value = parseFloat(lengthMatch[1]);
+    const unit = lengthMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10;
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4;
+    }
+    
+    dimensions.length = value;
   }
   
-  // Extract thickness
-  const thicknessMatch = /(?:thickness|thick)\s*(?:of\s*)?(\d+\.?\d*)\s*mm/i.exec(text);
+  // Extract THICKNESS with unit support
+  const thicknessMatch = /(?:thickness|thick)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
   if (thicknessMatch) {
-    dimensions.thickness = parseFloat(thicknessMatch[1]);
+    let value = parseFloat(thicknessMatch[1]);
+    const unit = thicknessMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10;
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4;
+    }
+    
+    dimensions.thickness = value;
   }
   
-  // Store all extracted values
-  dimensions.allValues = mmValues;
+  // Extract WIDTH with unit support
+  const widthMatch = /(?:width|wide)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (widthMatch) {
+    let value = parseFloat(widthMatch[1]);
+    const unit = widthMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10;
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4;
+    }
+    
+    dimensions.width = value;
+  }
+  
+  // Extract HEIGHT with unit support
+  const heightMatch = /(?:height|tall)\s*(?:of\s*)?(?:is\s*)?(\d+\.?\d*)\s*(cm|mm|millimeter|centimeter|inch|in)?/i.exec(text);
+  if (heightMatch) {
+    let value = parseFloat(heightMatch[1]);
+    const unit = heightMatch[2]?.toLowerCase();
+    
+    if (unit === 'cm' || unit === 'centimeter') {
+      value *= 10;
+    } else if (unit === 'inch' || unit === 'in') {
+      value *= 25.4;
+    }
+    
+    dimensions.height = value;
+  }
   
   return dimensions;
 }
@@ -143,79 +259,313 @@ function buildParameters(type, dimensions, description) {
   
   switch (type) {
     case 'gear':
-      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
-      params.thickness = dimensions.thickness || dimensions.allValues[1] || 10;
+      // Prioritize explicitly named dimensions
+      if (dimensions.radius) {
+        // Radius explicitly specified
+        params.radius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // Diameter specified, convert to radius
+        params.radius = dimensions.diameter / 2;
+      } else if (dimensions.allValues && dimensions.allValues.length > 0) {
+        // Use first value as diameter, convert to radius
+        params.radius = dimensions.allValues[0] / 2;
+      } else {
+        // Default
+        params.radius = 25;
+      }
+      
+      if (dimensions.thickness) {
+        params.thickness = dimensions.thickness;
+      } else if (dimensions.allValues && dimensions.allValues.length > 1) {
+        params.thickness = dimensions.allValues[1];
+      } else {
+        params.thickness = 10;
+      }
+      
       params.teeth = dimensions.teeth || 20;
       params.module = params.radius * 2 / params.teeth;
       break;
       
     case 'shaft':
-      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 12.5;
-      params.length = dimensions.length || dimensions.allValues[1] || 100;
+      if (dimensions.radius) {
+        // Radius explicitly specified
+        params.radius = dimensions.radius;
+      } else if (dimensions.diameter) {
+        // Diameter specified
+        params.radius = dimensions.diameter / 2;
+      } else if (dimensions.allValues && dimensions.allValues.length > 0) {
+        params.radius = dimensions.allValues[0] / 2;
+      } else {
+        params.radius = 12.5;
+      }
+      
+      if (dimensions.length) {
+        params.length = dimensions.length;
+      } else if (dimensions.allValues && dimensions.allValues.length > 1) {
+        params.length = dimensions.allValues[1];
+      } else {
+        params.length = 100;
+      }
       break;
       
     case 'bearing':
-      params.outerRadius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 30;
+      if (dimensions.diameter) {
+        params.outerRadius = dimensions.diameter / 2;
+      } else if (dimensions.allValues.length > 0) {
+        params.outerRadius = dimensions.allValues[0] / 2;
+      } else {
+        params.outerRadius = 30;
+      }
+      
       params.innerRadius = params.outerRadius * 0.5;
-      params.thickness = dimensions.thickness || dimensions.allValues[1] || 10;
+      
+      if (dimensions.thickness) {
+        params.thickness = dimensions.thickness;
+      } else if (dimensions.allValues.length > 1) {
+        params.thickness = dimensions.allValues[1];
+      } else {
+        params.thickness = 10;
+      }
       break;
       
     case 'bracket':
     case 'plate':
-      params.width = dimensions.width || dimensions.allValues[0] || 50;
-      params.height = dimensions.height || dimensions.allValues[1] || 50;
-      params.depth = dimensions.depth || dimensions.thickness || dimensions.allValues[2] || 10;
+      // Prioritize explicitly named dimensions
+      if (dimensions.width) {
+        params.width = dimensions.width;
+      } else if (dimensions.allValues.length > 0) {
+        params.width = dimensions.allValues[0];
+      } else {
+        params.width = 50;
+      }
+      
+      if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.allValues.length > 1) {
+        params.height = dimensions.allValues[1];
+      } else {
+        params.height = 50;
+      }
+      
+      if (dimensions.depth) {
+        params.depth = dimensions.depth;
+      } else if (dimensions.thickness) {
+        params.depth = dimensions.thickness;
+      } else if (dimensions.allValues.length > 2) {
+        params.depth = dimensions.allValues[2];
+      } else {
+        params.depth = 10;
+      }
       break;
       
     case 'bolt':
-      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 4;
-      params.length = dimensions.length || dimensions.allValues[1] || 30;
+      if (dimensions.diameter) {
+        params.radius = dimensions.diameter / 2;
+      } else if (dimensions.allValues.length > 0) {
+        params.radius = dimensions.allValues[0] / 2;
+      } else {
+        params.radius = 4;
+      }
+      
+      if (dimensions.length) {
+        params.length = dimensions.length;
+      } else if (dimensions.allValues.length > 1) {
+        params.length = dimensions.allValues[1];
+      } else {
+        params.length = 30;
+      }
+      
       params.headRadius = params.radius * 1.5;
       params.headHeight = params.radius * 0.8;
       break;
       
     case 'cube':
-      // For cube, use the first dimension value for all sides
-      const cubeSize = dimensions.allValues[0] || 50;
-      params.size = cubeSize;
-      params.width = cubeSize;
-      params.height = cubeSize;
-      params.depth = cubeSize;
+      // Check if multiple dimensions are specified (making it a rectangular box)
+      if (dimensions.width && dimensions.height) {
+        // User specified width and height - create rectangular box
+        params.width = dimensions.width;
+        params.height = dimensions.height;
+        params.depth = dimensions.depth || dimensions.width; // Use depth if specified, otherwise match width
+      } else if (dimensions.allValues.length >= 2) {
+        // "X by Y" pattern - create rectangular box
+        params.width = dimensions.allValues[0];
+        params.height = dimensions.allValues[1];
+        params.depth = dimensions.allValues[2] || dimensions.allValues[0]; // Use third value or match first
+      } else if (dimensions.width) {
+        // Only one dimension - true cube
+        params.width = dimensions.width;
+        params.height = dimensions.width;
+        params.depth = dimensions.width;
+      } else if (dimensions.allValues.length > 0) {
+        // Only one value - true cube
+        const cubeSize = dimensions.allValues[0];
+        params.width = cubeSize;
+        params.height = cubeSize;
+        params.depth = cubeSize;
+      } else {
+        // Default cube
+        params.width = 50;
+        params.height = 50;
+        params.depth = 50;
+      }
+      
+      params.size = params.width; // Keep for backward compatibility
       break;
       
     case 'prism':
-      // For prism, need base dimensions and height
-      params.baseWidth = dimensions.width || dimensions.allValues[0] || 30;
-      params.baseHeight = dimensions.height || dimensions.allValues[1] || 30;
-      params.length = dimensions.length || dimensions.depth || dimensions.allValues[2] || 50;
+      if (dimensions.width) {
+        params.baseWidth = dimensions.width;
+      } else if (dimensions.allValues.length > 0) {
+        params.baseWidth = dimensions.allValues[0];
+      } else {
+        params.baseWidth = 30;
+      }
+      
+      if (dimensions.height) {
+        params.baseHeight = dimensions.height;
+      } else if (dimensions.allValues.length > 1) {
+        params.baseHeight = dimensions.allValues[1];
+      } else {
+        params.baseHeight = 30;
+      }
+      
+      if (dimensions.length) {
+        params.length = dimensions.length;
+      } else if (dimensions.depth) {
+        params.length = dimensions.depth;
+      } else if (dimensions.allValues.length > 2) {
+        params.length = dimensions.allValues[2];
+      } else {
+        params.length = 50;
+      }
       break;
       
     case 'cylinder':
-      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
-      params.height = dimensions.length || dimensions.height || dimensions.allValues[1] || 50;
+      if (dimensions.diameter) {
+        params.radius = dimensions.diameter / 2;
+      } else if (dimensions.allValues.length > 0) {
+        params.radius = dimensions.allValues[0] / 2;
+      } else {
+        params.radius = 25;
+      }
+      
+      if (dimensions.length) {
+        params.height = dimensions.length;
+      } else if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.allValues.length > 1) {
+        params.height = dimensions.allValues[1];
+      } else {
+        params.height = 50;
+      }
+      
+      // Handle hollow cylinder
+      if (dimensions.isHollow) {
+        params.isHollow = true;
+        
+        // Calculate inner radius based on wall thickness
+        if (dimensions.wallThickness) {
+          params.wallThickness = dimensions.wallThickness;
+          params.innerRadius = params.radius - dimensions.wallThickness;
+        } else {
+          // Default wall thickness is 10% of outer radius
+          params.wallThickness = params.radius * 0.1;
+          params.innerRadius = params.radius * 0.9;
+        }
+        
+        // Ensure inner radius is positive
+        if (params.innerRadius <= 0) {
+          params.innerRadius = params.radius * 0.5;
+          params.wallThickness = params.radius * 0.5;
+        }
+      }
       break;
       
     case 'sphere':
-      params.radius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
+      if (dimensions.diameter) {
+        params.radius = dimensions.diameter / 2;
+      } else if (dimensions.allValues.length > 0) {
+        params.radius = dimensions.allValues[0] / 2;
+      } else {
+        params.radius = 25;
+      }
       break;
       
     case 'cone':
-      params.baseRadius = dimensions.diameter ? dimensions.diameter / 2 : dimensions.allValues[0] / 2 || 25;
-      params.topRadius = dimensions.topDiameter ? dimensions.topDiameter / 2 : 0; // Default to point
-      params.height = dimensions.length || dimensions.height || dimensions.allValues[1] || 50;
+      if (dimensions.diameter) {
+        params.baseRadius = dimensions.diameter / 2;
+      } else if (dimensions.allValues.length > 0) {
+        params.baseRadius = dimensions.allValues[0] / 2;
+      } else {
+        params.baseRadius = 25;
+      }
+      
+      params.topRadius = dimensions.topDiameter ? dimensions.topDiameter / 2 : 0;
+      
+      if (dimensions.length) {
+        params.height = dimensions.length;
+      } else if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.allValues.length > 1) {
+        params.height = dimensions.allValues[1];
+      } else {
+        params.height = 50;
+      }
       break;
       
     case 'pyramid':
-      params.baseWidth = dimensions.width || dimensions.allValues[0] || 30;
-      params.baseDepth = dimensions.depth || dimensions.allValues[1] || 30;
-      params.height = dimensions.height || dimensions.length || dimensions.allValues[2] || 40;
+      if (dimensions.width) {
+        params.baseWidth = dimensions.width;
+      } else if (dimensions.allValues.length > 0) {
+        params.baseWidth = dimensions.allValues[0];
+      } else {
+        params.baseWidth = 30;
+      }
+      
+      if (dimensions.depth) {
+        params.baseDepth = dimensions.depth;
+      } else if (dimensions.allValues.length > 1) {
+        params.baseDepth = dimensions.allValues[1];
+      } else {
+        params.baseDepth = 30;
+      }
+      
+      if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.length) {
+        params.height = dimensions.length;
+      } else if (dimensions.allValues.length > 2) {
+        params.height = dimensions.allValues[2];
+      } else {
+        params.height = 40;
+      }
       break;
       
     default:
       // Generic solid - try to extract 3D dimensions
-      params.width = dimensions.width || dimensions.allValues[0] || 50;
-      params.height = dimensions.height || dimensions.allValues[1] || 50;
-      params.depth = dimensions.depth || dimensions.allValues[2] || 10;
+      if (dimensions.width) {
+        params.width = dimensions.width;
+      } else if (dimensions.allValues.length > 0) {
+        params.width = dimensions.allValues[0];
+      } else {
+        params.width = 50;
+      }
+      
+      if (dimensions.height) {
+        params.height = dimensions.height;
+      } else if (dimensions.allValues.length > 1) {
+        params.height = dimensions.allValues[1];
+      } else {
+        params.height = 50;
+      }
+      
+      if (dimensions.depth) {
+        params.depth = dimensions.depth;
+      } else if (dimensions.allValues.length > 2) {
+        params.depth = dimensions.allValues[2];
+      } else {
+        params.depth = 10;
+      }
   }
   
   return params;

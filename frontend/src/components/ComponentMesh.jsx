@@ -220,13 +220,34 @@ export default function ComponentMesh({ design, autoRotate = true, showCenterLin
           bevelEnabled: false
         });
       case 'cylinder':
-        const cylinderGeo = new THREE.CylinderGeometry(
-          parameters.radius || 25,
-          parameters.radius || 25,
-          parameters.height || 50,
-          32
-        );
-        cylinderGeo.rotateX(Math.PI / 2);
+        let cylinderGeo;
+        if (parameters.isHollow) {
+          // Create hollow cylinder using LatheGeometry
+          const points = [];
+          const innerR = parameters.innerRadius || parameters.radius * 0.8;
+          const outerR = parameters.radius || 25;
+          const height = parameters.height || 50;
+          const halfHeight = height / 2;
+          
+          // Create profile for hollow cylinder
+          points.push(new THREE.Vector2(innerR, -halfHeight));
+          points.push(new THREE.Vector2(outerR, -halfHeight));
+          points.push(new THREE.Vector2(outerR, halfHeight));
+          points.push(new THREE.Vector2(innerR, halfHeight));
+          points.push(new THREE.Vector2(innerR, -halfHeight));
+          
+          cylinderGeo = new THREE.LatheGeometry(points, 32);
+          cylinderGeo.rotateX(Math.PI / 2);
+        } else {
+          // Solid cylinder
+          cylinderGeo = new THREE.CylinderGeometry(
+            parameters.radius || 25,
+            parameters.radius || 25,
+            parameters.height || 50,
+            32
+          );
+          cylinderGeo.rotateX(Math.PI / 2);
+        }
         return cylinderGeo;
       case 'sphere':
         return new THREE.SphereGeometry(

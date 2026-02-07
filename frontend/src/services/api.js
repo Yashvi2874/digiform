@@ -9,6 +9,26 @@ const api = axios.create({
   }
 });
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const generateDesign = async (description) => {
   const response = await api.post('/api/generate', { description });
   return response.data;
@@ -48,6 +68,16 @@ export const sendMessage = async (sessionId, message) => {
 
 export const getChatHistory = async (sessionId) => {
   const response = await api.get(`/api/chat/history/${sessionId}`);
+  return response.data;
+};
+
+export const getUserSessions = async () => {
+  const response = await api.get('/api/chat/sessions');
+  return response.data;
+};
+
+export const deleteSession = async (sessionId) => {
+  const response = await api.delete(`/api/chat/session/${sessionId}`);
   return response.data;
 };
 

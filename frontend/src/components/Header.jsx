@@ -1,7 +1,7 @@
 import React from 'react';
-import { Box, History, Zap } from 'lucide-react';
+import { Box, History, Zap, LogOut, User } from 'lucide-react';
 
-export default function Header({ activeTab, setActiveTab }) {
+export default function Header({ activeTab, setActiveTab, user, onLogout }) {
   return (
     <header className="h-20 bg-gradient-to-r from-dark via-dark-light to-dark border-b border-primary/20 flex items-center justify-between px-8 relative overflow-hidden">
       {/* Animated background effect */}
@@ -24,7 +24,7 @@ export default function Header({ activeTab, setActiveTab }) {
         </div>
       </div>
       
-      <nav className="flex gap-3 relative z-10">
+      <nav className="flex gap-3 items-center relative z-10">
         <button
           onClick={() => setActiveTab('design')}
           className={`px-6 py-2.5 rounded-lg transition-all font-semibold ${
@@ -46,6 +46,26 @@ export default function Header({ activeTab, setActiveTab }) {
           <History className="w-4 h-4" />
           History
         </button>
+        
+        {/* User Info */}
+        <div className="ml-4 flex items-center gap-3 px-4 py-2 bg-dark-light/50 rounded-lg border border-gray-700">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">{user?.name}</p>
+              <p className="text-xs text-gray-400">{user?.email}</p>
+            </div>
+          </div>
+          <button
+            onClick={onLogout}
+            className="p-2 hover:bg-red-600/20 rounded-lg transition text-gray-400 hover:text-red-400"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </nav>
     </header>
   );

@@ -146,7 +146,14 @@ function extractModifications(message, currentDesign) {
 }
 
 function applyModifications(design, modifications) {
-  const updated = { ...design };
+  const updated = { 
+    ...design,
+    type: design.type,
+    description: design.description,
+    material: design.material,
+    complexity: design.complexity,
+    parameters: { ...design.parameters }
+  };
   
   if (modifications.material) {
     updated.material = modifications.material;
@@ -169,7 +176,7 @@ function applyModifications(design, modifications) {
     updated.parameters.thickness = modifications.thickness;
   }
   
-  updated.description = `Modified ${design.type} based on user feedback`;
+  updated.description = `Modified ${design.type} - ${Object.keys(modifications).join(', ')} changed`;
   
   return updated;
 }

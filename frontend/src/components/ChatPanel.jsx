@@ -1,16 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Bot, User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Send, Loader2, Bot, User, CheckCircle, XCircle, AlertCircle, Trash2, Plus, MessageSquarePlus, History } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import { useDesignStore } from '../store/designStore';
-import { sendMessage, approveDesign, rejectDesign, generateDesign } from '../services/api';
+import { sendMessage, approveDesign, rejectDesign, generateDesign, deleteSession, createSession } from '../services/api';
+import ChatHistory from './ChatHistory';
 
 export default function ChatPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef(null);
-  const { messages, addMessage, sessionId } = useChatStore();
-  const { addDesign } = useDesignStore();
+  const { messages, addMessage, sessionId, clearChat, initSession, userId } = useChatStore();
+  const { addDesign, clearDesigns } = useDesignStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,7 +35,15 @@ export default function ChatPanel() {
     addMessage({ role: 'user', content: userMessage });
 
     try {
-      const response = await sendMessage(sessionId, userMessage);
+      // Create session if it doesn't exist
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const { sessionId: newSessionId } = await createSession();
+        initSession(newSessionId, userId);
+        currentSessionId = newSessionId;
+      }
+
+      const response = await sendMessage(currentSessionId, userMessage);
       
       // Add assistant response
       addMessage({
@@ -75,6 +86,34 @@ export default function ChatPanel() {
       });
     } catch (error) {
       console.error('Rejection error:', error);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!sessionId) return;
+    
+    try {
+      // Delete session from database
+      await deleteSession(sessionId);
+      
+      // Clear local state (don't create new session yet)
+      clearChat();
+      clearDesigns();
+      
+      setShowConfirm(false);
+    } catch (error) {
+      console.error('Clear chat error:', error);
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      // Current session is automatically saved in database
+      // Clear local state (don't create new session until user sends first message)
+      clearChat();
+      clearDesigns();
+    } catch (error) {
+      console.error('New chat error:', error);
     }
   };
 
@@ -133,16 +172,75 @@ export default function ChatPanel() {
     <div className="flex flex-col h-full bg-gradient-to-b from-dark to-dark-light">
       {/* Chat Header */}
       <div className="p-4 border-b border-gray-700 bg-dark-light/50 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-3">
           <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
             <Bot className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-lg">DigiForm AI Assistant</h2>
-            <p className="text-xs text-gray-400">Your intelligent design companion</p>
+            <h2 className="font-bold text-base leading-tight">DigiForm AI Assistant</h2>
+            <p className="text-[10px] text-gray-400 leading-tight">Your intelligent design companion</p>
           </div>
         </div>
+        
+        {/* Chat Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHistory(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-semibold transition"
+            title="View chat history"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>History</span>
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition"
+            title="Start new chat (saves current)"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5" />
+            <span>New Chat</span>
+          </button>
+          <button
+            onClick={() => setShowConfirm(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition"
+            title="Clear chat and delete from database"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear</span>
+          </button>
+        </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirm && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-dark-light border-2 border-red-500 rounded-xl p-6 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-600/20 rounded-lg">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Clear Chat History?</h3>
+            </div>
+            <p className="text-gray-300 mb-6">
+              This will permanently delete this chat session and all associated designs from the database. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleClearChat}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition"
+              >
+                Yes, Clear Chat
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-semibold transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -245,39 +343,41 @@ export default function ChatPanel() {
 
               {/* Approval Buttons */}
               {message.needsApproval && (
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => handleApprove(index, message.designId)}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve Design
-                  </button>
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprove(index, message.designId)}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleReject(index, message.designId)}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition"
+                    >
+                      <XCircle className="w-3 h-3" />
+                      Modify
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleGenerateCAD(message.design)}
                     disabled={generating}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition"
                   >
                     {generating ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 className="w-3 h-3 animate-spin" />
                         Generating...
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         Generate CAD
                       </>
                     )}
-                  </button>
-                  <button
-                    onClick={() => handleReject(index, message.designId)}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Modify
                   </button>
                 </div>
               )}
@@ -339,6 +439,9 @@ export default function ChatPanel() {
           💡 Try: "Design a gear with 20 teeth" or "Make it aluminum instead"
         </p>
       </div>
+
+      {/* Chat History Sidebar */}
+      <ChatHistory isOpen={showHistory} onClose={() => setShowHistory(false)} />
     </div>
   );
 }

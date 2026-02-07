@@ -4,23 +4,48 @@ import ChatPanel from './components/ChatPanel';
 import Viewer3D from './components/Viewer3D';
 import AnalysisPanel from './components/AnalysisPanel';
 import VersionControl from './components/VersionControl';
+import AuthPage from './components/AuthPage';
 import { useDesignStore } from './store/designStore';
 import { useChatStore } from './store/chatStore';
 import { createSession } from './services/api';
 
 function App() {
   const [activeTab, setActiveTab] = useState('design');
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { currentDesign } = useDesignStore();
-  const { sessionId, initSession } = useChatStore();
+  const { sessionId, userId, initSession, clearAll } = useChatStore();
 
   useEffect(() => {
-    // Initialize chat session if not exists
-    if (!sessionId) {
-      createSession().then(({ sessionId: newSessionId }) => {
-        initSession(newSessionId);
-      });
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    
+    if (token && savedUser) {
+      const userData = JSON.parse(savedUser);
+      setUser(userData);
+      setIsAuthenticated(true);
     }
-  }, [sessionId, initSession]);
+  }, []);
+
+  // Don't create session automatically - let ChatPanel create it on first message
+
+  const handleLogin = (userData, token) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+    clearAll();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setIsAuthenticated(false);
+    clearAll();
+  };
+
+  if (!isAuthenticated) {
+    return <AuthPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className="min-h-screen bg-dark text-white relative overflow-hidden">
@@ -29,7 +54,7 @@ function App() {
         <div className="absolute inset-0 bg-grid-pattern animate-grid-flow"></div>
       </div>
       
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={handleLogout} />
       
       <div className="flex h-[calc(100vh-80px)] relative">
         {/* Left Panel - Chat */}

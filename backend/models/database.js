@@ -1,6 +1,28 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true, trim: true },
+  company: { type: String, trim: true },
+  role: { type: String, default: 'user' },
+  createdAt: { type: Date, default: Date.now },
+  lastLogin: { type: Date }
+});
+
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
 
 const sessionSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -50,198 +72,190 @@ const cadFileSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+export const User = mongoose.model('User', userSchema);
 export const Session = mongoose.model('Session', sessionSchema);
 export const Message = mongoose.model('Message', messageSchema);
 export const Design = mongoose.model('Design', designSchema);
 export const Analysis = mongoose.model('Analysis', analysisSchema);
 export const CADFile = mongoose.model('CADFile', cadFileSchema);
 
-// In-memory storage for development when MongoDB is not available
-let inMemoryStorage = {
-  sessions: [],
-  messages: [],
-  designs: [],
-  analyses: [],
-  cadFiles: []
-};
-
-let isMongoConnected = false;
-
 export const connectDB = async () => {
   try {
-    if (process.env.MONGODB_URI) {
-      const conn = await mongoose.connect(process.env.MONGODB_URI);
-      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-      isMongoConnected = true;
-      return conn;
-    } else {
-      console.log('⚠️  MongoDB URI not provided - using in-memory storage');
-      isMongoConnected = false;
-      return { connection: { host: 'in-memory' } };
-    }
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    return conn;
   } catch (error) {
     console.error(`❌ MongoDB Error: ${error.message}`);
-    console.log('⚠️  Falling back to in-memory storage');
-    isMongoConnected = false;
-    return { connection: { host: 'in-memory-fallback' } };
+    process.exit(1);
   }
 };
 
-// Session functions
-export const createSession = async () => {
-  if (isMongoConnected) {
-    const session = new Session();
-    await session.save();
-    return session._id.toString();
-  } else {
-    const sessionId = 'session_' + Date.now();
-    inMemoryStorage.sessions.push({ _id: sessionId, createdAt: new Date(), updatedAt: new Date() });
-    return sessionId;
+export const createUser = async (email, password, name, company) => {
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    throw new Error('User already exists');
+  }
+  const user = new User({ email, password, name, company });
+  await user.save();
+  return { id: user._id.toString(), email: user.email, name: user.name };
+};
+
+export const authenticateUser = async (email, password) => {
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new Error('Invalid credentials');
+  }
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    throw new Error('Invalid credentials');
+  }
+  user.lastLogin = new Date();
+  await user.save();
+  return { id: user._id.toString(), email: user.email, name: user.name, company: user.company };
+};
+
+export const getUserById = async (userId) => {
+  const user = await User.findById(userId).select('-password');
+  return user;
+};
+
+export const createSession = async (userId) => {
+  const session = new Session({ userId });
+  await session.save();
+  return session._id.toString();
+};
+
+export const getUserSessions = async (userId) => {
+  const sessions = await Session.find({ userId }).sort({ updatedAt: -1 });
+  
+  console.log(`Found ${sessions.length} sessions for user ${userId}`);
+  
+  // Get first message for each session as preview and filter out empty sessions
+  const sessionsWithPreview = await Promise.all(
+    sessions.map(async (session) => {
+      const messageCount = await Message.countDocuments({ sessionId: session._id });
+      
+      console.log(`Session ${session._id}: ${messageCount} messages`);
+      
+      // Skip empty sessions
+      if (messageCount === 0) {
+        console.log(`Skipping empty session ${session._id}`);
+        return null;
+      }
+      
+      const firstMessage = await Message.findOne({ 
+        sessionId: session._id, 
+        role: 'user' 
+      }).sort({ timestamp: 1 });
+      
+      console.log(`First message for session ${session._id}:`, firstMessage ? firstMessage.content.substring(0, 30) : 'NONE');
+      
+      // Use first 60 characters of first user message as preview
+      const preview = firstMessage 
+        ? firstMessage.content.substring(0, 60) + (firstMessage.content.length > 60 ? '...' : '')
+        : 'New Chat';
+      
+      console.log(`Preview for session ${session._id}: "${preview}"`);
+      
+      return {
+        _id: session._id,
+        userId: session.userId,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        preview,
+        messageCount
+      };
+    })
+  );
+  
+  // Filter out null values (empty sessions)
+  const filtered = sessionsWithPreview.filter(session => session !== null);
+  console.log(`Returning ${filtered.length} sessions with previews`);
+  return filtered;
+};
+
+export const deleteSession = async (sessionId) => {
+  // Delete all related data
+  await Message.deleteMany({ sessionId });
+  const designs = await Design.find({ sessionId });
+  const designIds = designs.map(d => d._id);
+  
+  // Delete analyses and CAD files for these designs
+  await Analysis.deleteMany({ designId: { $in: designIds } });
+  await CADFile.deleteMany({ designId: { $in: designIds } });
+  
+  // Delete designs
+  await Design.deleteMany({ sessionId });
+  
+  // Delete session
+  await Session.findByIdAndDelete(sessionId);
+};
+
+export const deleteEmptySessions = async (userId) => {
+  // Find all sessions for this user
+  const sessions = await Session.find({ userId });
+  
+  // Delete sessions with no messages
+  for (const session of sessions) {
+    const messageCount = await Message.countDocuments({ sessionId: session._id });
+    if (messageCount === 0) {
+      await Session.findByIdAndDelete(session._id);
+    }
   }
 };
 
 export const saveMessage = async (sessionId, role, content) => {
-  if (isMongoConnected) {
-    const message = new Message({ sessionId, role, content });
-    await message.save();
-    return message._id.toString();
-  } else {
-    const messageId = 'message_' + Date.now();
-    inMemoryStorage.messages.push({ 
-      _id: messageId, 
-      sessionId, 
-      role, 
-      content, 
-      timestamp: new Date() 
-    });
-    return messageId;
-  }
+  const message = new Message({ sessionId, role, content });
+  await message.save();
+  
+  // Update session's updatedAt timestamp
+  await Session.findByIdAndUpdate(sessionId, { updatedAt: new Date() });
+  
+  return message._id.toString();
 };
 
 export const getMessages = async (sessionId) => {
-  if (isMongoConnected) {
-    return await Message.find({ sessionId }).sort({ timestamp: 1 });
-  } else {
-    return inMemoryStorage.messages
-      .filter(msg => msg.sessionId === sessionId)
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  }
+  return await Message.find({ sessionId }).sort({ timestamp: 1 });
 };
 
-// Design functions
 export const saveDesign = async (sessionId, messageId, design) => {
-  if (isMongoConnected) {
-    const newDesign = new Design({ sessionId, messageId, ...design });
-    await newDesign.save();
-    return newDesign._id.toString();
-  } else {
-    const designId = 'design_' + Date.now();
-    inMemoryStorage.designs.push({ 
-      _id: designId, 
-      sessionId, 
-      messageId, 
-      ...design,
-      createdAt: new Date()
-    });
-    return designId;
-  }
+  const newDesign = new Design({ sessionId, messageId, ...design });
+  await newDesign.save();
+  return newDesign._id.toString();
 };
 
 export const getDesign = async (id) => {
-  if (isMongoConnected) {
-    return await Design.findById(id);
-  } else {
-    return inMemoryStorage.designs.find(d => d._id === id);
-  }
+  return await Design.findById(id);
 };
 
 export const getDesigns = async (sessionId) => {
-  if (isMongoConnected) {
-    return await Design.find({ sessionId }).sort({ createdAt: -1 });
-  } else {
-    return inMemoryStorage.designs
-      .filter(d => d.sessionId === sessionId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }
+  return await Design.find({ sessionId }).sort({ createdAt: -1 });
 };
 
 export const approveDesign = async (id) => {
-  if (isMongoConnected) {
-    return await Design.findByIdAndUpdate(id, { approved: true, status: 'approved' });
-  } else {
-    const design = inMemoryStorage.designs.find(d => d._id === id);
-    if (design) {
-      design.approved = true;
-      design.status = 'approved';
-    }
-    return design;
-  }
+  return await Design.findByIdAndUpdate(id, { approved: true, status: 'approved' });
 };
 
 export const updateDesignStatus = async (id, status) => {
-  if (isMongoConnected) {
-    return await Design.findByIdAndUpdate(id, { status });
-  } else {
-    const design = inMemoryStorage.designs.find(d => d._id === id);
-    if (design) {
-      design.status = status;
-    }
-    return design;
-  }
+  return await Design.findByIdAndUpdate(id, { status });
 };
 
-// Analysis functions
 export const saveAnalysis = async (designId, analysis) => {
-  if (isMongoConnected) {
-    const newAnalysis = new Analysis({ designId, ...analysis });
-    await newAnalysis.save();
-    return newAnalysis._id.toString();
-  } else {
-    const analysisId = 'analysis_' + Date.now();
-    inMemoryStorage.analyses.push({ 
-      _id: analysisId, 
-      designId, 
-      ...analysis,
-      createdAt: new Date()
-    });
-    return analysisId;
-  }
+  const newAnalysis = new Analysis({ designId, ...analysis });
+  await newAnalysis.save();
+  return newAnalysis._id.toString();
 };
 
 export const getAnalysis = async (designId) => {
-  if (isMongoConnected) {
-    return await Analysis.findOne({ designId }).sort({ createdAt: -1 });
-  } else {
-    return inMemoryStorage.analyses
-      .filter(a => a.designId === designId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-  }
+  return await Analysis.findOne({ designId }).sort({ createdAt: -1 });
 };
 
-// CAD File functions
 export const saveCADFile = async (designId, format, filePath, fileSize) => {
-  if (isMongoConnected) {
-    const cadFile = new CADFile({ designId, format, filePath, fileSize });
-    await cadFile.save();
-    return cadFile._id.toString();
-  } else {
-    const cadFileId = 'cadfile_' + Date.now();
-    inMemoryStorage.cadFiles.push({ 
-      _id: cadFileId, 
-      designId, 
-      format, 
-      filePath, 
-      fileSize,
-      createdAt: new Date()
-    });
-    return cadFileId;
-  }
+  const cadFile = new CADFile({ designId, format, filePath, fileSize });
+  await cadFile.save();
+  return cadFile._id.toString();
 };
 
 export const getCADFiles = async (designId) => {
-  if (isMongoConnected) {
-    return await CADFile.find({ designId });
-  } else {
-    return inMemoryStorage.cadFiles.filter(f => f.designId === designId);
-  }
+  return await CADFile.find({ designId });
 };

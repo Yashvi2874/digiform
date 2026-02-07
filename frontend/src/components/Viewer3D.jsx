@@ -3,6 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import { useDesignStore } from '../store/designStore';
 import ComponentMesh from './ComponentMesh';
+import ReferenceAxes from './ReferenceAxes';
 import { Loader2, RotateCw } from 'lucide-react';
 
 function AutoRotateController({ enabled }) {
@@ -34,7 +35,6 @@ export default function Viewer3D() {
   const { currentDesign } = useDesignStore();
   const hasAnalysis = currentDesign?.analysis;
   const [autoRotate, setAutoRotate] = useState(false);
-  const [showCenterLines, setShowCenterLines] = useState(false);
 
   return (
     <div className="w-full h-full bg-gray-900 relative border border-gray-700">
@@ -51,7 +51,7 @@ export default function Viewer3D() {
               )}
             </div>
             <div className="ml-auto flex items-center gap-3">
-              {/* Autorotate Button - Moved to toolbar */}
+              {/* Autorotate Button */}
               <button
                 onClick={() => setAutoRotate(!autoRotate)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
@@ -63,23 +63,8 @@ export default function Viewer3D() {
                 <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} />
                 <span>{autoRotate ? 'AUTO' : 'ROTATE'}</span>
               </button>
-              
-              {/* Centerline Toggle Button */}
-              <button
-                onClick={() => setShowCenterLines(!showCenterLines)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                  showCenterLines 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                }`}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                </svg>
-                <span>{showCenterLines ? 'CENTER ON' : 'CENTER'}</span>
-              </button>
                         
-              {/* Material Info - Compact */}
+              {/* Material Info */}
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-gray-400">Material:</span>
                 <span className="text-white font-medium bg-gray-700 px-2 py-1 rounded">
@@ -118,7 +103,10 @@ export default function Viewer3D() {
                 shadow-mapSize-height={2048}
               />
               
-              <ComponentMesh design={currentDesign} autoRotate={autoRotate} showCenterLines={showCenterLines} />
+              <ComponentMesh design={currentDesign} autoRotate={autoRotate} />
+              
+              {/* Reference Axes with Labels */}
+              <ReferenceAxes size={50} />
               
               {/* Grid */}
               <Grid 

@@ -167,6 +167,17 @@ function calculateVolume(type, params) {
     case 'gear':
     case 'shaft':
       return Math.PI * Math.pow(params.radius || 25, 2) * (params.thickness || params.length || 10);
+    case 'cylinder':
+      if (params.isHollow) {
+        // Hollow cylinder volume = π * (R² - r²) * h
+        const outerRadius = params.radius || 25;
+        const innerRadius = params.innerRadius || outerRadius * 0.8;
+        const height = params.height || 50;
+        return Math.PI * (Math.pow(outerRadius, 2) - Math.pow(innerRadius, 2)) * height;
+      } else {
+        // Solid cylinder
+        return Math.PI * Math.pow(params.radius || 25, 2) * (params.height || 50);
+      }
     case 'bracket':
       return (params.width || 50) * (params.height || 50) * (params.depth || 10);
     default:
@@ -179,6 +190,15 @@ function calculateCrossSection(type, params) {
     case 'gear':
     case 'shaft':
       return Math.PI * Math.pow(params.radius || 25, 2);
+    case 'cylinder':
+      if (params.isHollow) {
+        // Hollow cylinder cross-section = π * (R² - r²)
+        const outerRadius = params.radius || 25;
+        const innerRadius = params.innerRadius || outerRadius * 0.8;
+        return Math.PI * (Math.pow(outerRadius, 2) - Math.pow(innerRadius, 2));
+      } else {
+        return Math.PI * Math.pow(params.radius || 25, 2);
+      }
     case 'bracket':
       return (params.width || 50) * (params.depth || 10);
     default:

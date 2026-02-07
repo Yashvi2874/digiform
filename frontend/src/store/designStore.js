@@ -20,5 +20,10 @@ export const useDesignStore = create((set) => ({
     currentDesign: state.currentDesign?.id === id 
       ? { ...state.currentDesign, analysis }
       : state.currentDesign
-  }))
+  })),
+
+  clearDesigns: () => set({
+    designs: [],
+    currentDesign: null
+  })
 }));
